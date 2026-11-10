@@ -1,0 +1,68 @@
+import { TopicItem } from '../types';
+
+export const INITIAL_TOPICS: TopicItem[] = [
+  {
+    id: 'sports',
+    name: 'Sports',
+    nameVi: 'Thể thao',
+    icon: 'bicycle-outline',
+    color: '#FF6B8B',
+    badgeCount: '12K+',
+  },
+  {
+    id: 'podcasts',
+    name: 'Podcasts',
+    nameVi: 'Podcasts',
+    icon: 'mic-outline',
+    color: '#4DA7FF',
+    badgeCount: '8.5K',
+  },
+  {
+    id: 'news',
+    name: 'News',
+    nameVi: 'Tin tức',
+    icon: 'newspaper-outline',
+    color: '#F4B740',
+    badgeCount: '34K',
+  },
+  {
+    id: 'travel',
+    name: 'Travel',
+    nameVi: 'Du lịch',
+    icon: 'globe-outline',
+    color: '#34D399',
+    badgeCount: '45K',
+  },
+  {
+    id: 'health',
+    name: 'Health',
+    nameVi: 'Sức khỏe',
+    icon: 'heart-outline',
+    color: '#A855F7',
+    badgeCount: '19K',
+  },
+  {
+    id: 'weather',
+    name: 'Weather',
+    nameVi: 'Thời tiết',
+    icon: 'sunny-outline',
+    color: '#EC4899',
+    badgeCount: '6K',
+  },
+  {
+    id: 'art',
+    name: 'Art',
+    nameVi: 'Nghệ thuật',
+    icon: 'color-palette-outline',
+    color: '#6366F1',
+    badgeCount: '28K',
+  },
+  {
+    id: 'more',
+    name: 'Topics',
+    nameVi: '+20 Chủ đề',
+    icon: 'apps-outline',
+    color: '#F97316',
+    badgeCount: '100+',
+  },
+];

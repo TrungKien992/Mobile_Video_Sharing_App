@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"id":{"$numberInt":"1"}},"name":"id_1","unique":true},{"v":{"$numberInt":"2"},"key":{"videoId":{"$numberInt":"1"}},"name":"videoId_1"}],"uuid":"ca3b5f16b6ba447fa52f8fa40f3bf580","collectionName":"comments","type":"collection"}

@@ -1,0 +1,190 @@
+[{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f0f"
+	},
+	"id": "user_demo",
+	"name": "Nguyễn Minh Khôi",
+	"username": "minhkhoi_vn",
+	"email": "demo@vclip.vn",
+	"password": "123456",
+	"phone": "0901234567",
+	"bio": "Sáng tạo nội dung Du lịch, Công nghệ & Ẩm thực Việt Nam 🇻🇳✨",
+	"avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [
+		"user_khanhvy",
+		"user_baongoc"
+	],
+	"following": [
+		"user_khanhvy",
+		"user_bepnhame",
+		"user_thucung"
+	],
+	"baseFollowersCount": 1420,
+	"baseLikesCount": 18500,
+	"createdAt": "2026-10-01T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f10"
+	},
+	"id": "user_bookstore_demo",
+	"name": "Trần Thu Hoài",
+	"username": "thuhoai_official",
+	"email": "demo@bookstore.vn",
+	"password": "123456",
+	"phone": "0912345678",
+	"bio": "Yêu đọc sách, quay vlog đời sống & chia sẻ năng lượng tích cực 🌸📚",
+	"avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [
+		"user_demo"
+	],
+	"following": [
+		"user_demo",
+		"user_khanhvy"
+	],
+	"baseFollowersCount": 980,
+	"baseLikesCount": 9400,
+	"createdAt": "2026-10-02T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f11"
+	},
+	"id": "user_khanhvy",
+	"name": "Khánh Vy Travel",
+	"username": "khanhvy_travel",
+	"email": "khanhvy@vclip.vn",
+	"password": "123456",
+	"phone": "0987654321",
+	"bio": "Khám phá 63 tỉnh thành Việt Nam & văn hóa thế giới ✈️🌏",
+	"avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [
+		"user_demo",
+		"user_bookstore_demo"
+	],
+	"following": [
+		"user_demo"
+	],
+	"baseFollowersCount": 45200,
+	"baseLikesCount": 680000,
+	"createdAt": "2026-10-03T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f12"
+	},
+	"id": "user_thucung",
+	"name": "Trạm Thú Cưng Sài Gòn",
+	"username": "tramthucung_sg",
+	"email": "thucung@vclip.vn",
+	"password": "123456",
+	"phone": "0933445566",
+	"bio": "Chia sẻ khoảnh khắc đáng yêu của các boss Corgi, Golden & Mèo Anh 🐶🐱",
+	"avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [
+		"user_demo"
+	],
+	"following": [],
+	"baseFollowersCount": 82300,
+	"baseLikesCount": 1450000,
+	"createdAt": "2026-10-04T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f13"
+	},
+	"id": "user_bepnhame",
+	"name": "Bếp Nhà Mẹ Nấu",
+	"username": "bepnhame_vn",
+	"email": "bepnhame@vclip.vn",
+	"password": "123456",
+	"phone": "0977889900",
+	"bio": "Công thức nấu ăn gia đình Việt chuẩn vị trong 60 giây 🍜🥘",
+	"avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [
+		"user_demo"
+	],
+	"following": [
+		"user_khanhvy"
+	],
+	"baseFollowersCount": 63900,
+	"baseLikesCount": 920000,
+	"createdAt": "2026-10-05T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f14"
+	},
+	"id": "user_hoangnam",
+	"name": "Hoàng Nam Tech & Xe",
+	"username": "hoangnam_auto",
+	"email": "hoangnam@vclip.vn",
+	"password": "123456",
+	"phone": "0966554433",
+	"bio": "Đánh giá xe, hành trình phượt xuyên Việt & đồ chơi công nghệ 🚙⚡",
+	"avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80",
+	"isVerified": false,
+	"followers": [],
+	"following": [
+		"user_demo"
+	],
+	"baseFollowersCount": 28400,
+	"baseLikesCount": 410000,
+	"createdAt": "2026-10-06T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f15"
+	},
+	"id": "user_baongoc",
+	"name": "Bảo Ngọc Dance Studio",
+	"username": "baongoc_dance",
+	"email": "baongoc@vclip.vn",
+	"password": "123456",
+	"phone": "0944112233",
+	"bio": "Biên đạo nhảy hiện đại & xu hướng âm nhạc trẻ 💃🎶",
+	"avatarUrl": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [],
+	"following": [
+		"user_demo"
+	],
+	"baseFollowersCount": 94100,
+	"baseLikesCount": 2150000,
+	"createdAt": "2026-10-07T08:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f16"
+	},
+	"id": "user_vclipshop",
+	"name": "VClip Live Mall",
+	"username": "vclip_mall",
+	"email": "shop@vclip.vn",
+	"password": "123456",
+	"phone": "0909998877",
+	"bio": "Kênh Livestream săn deal công nghệ & phụ kiện chính hãng mỗi tối 🔥🛒",
+	"avatarUrl": "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80",
+	"isVerified": true,
+	"followers": [
+		"user_demo"
+	],
+	"following": [],
+	"baseFollowersCount": 112000,
+	"baseLikesCount": 1890000,
+	"createdAt": "2026-10-08T08:00:00.000Z",
+	"__v": 0
+}]
+

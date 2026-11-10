@@ -1,0 +1,330 @@
+[{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f17"
+	},
+	"id": "vid_1",
+	"title": "Khám phá đại dương xanh & Rùa biển quý hiếm dưới làn nước trong vắt",
+	"description": "Thước phim quay cận cảnh chú rùa biển bơi lội tự do giữa lòng đại dương xanh thẳm tuyệt đẹp 🐢🌊",
+	"videoUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_720/sea_turtle.mp4",
+	"thumbnailUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_600/sea_turtle.jpg",
+	"duration": "00:14",
+	"views": 158400,
+	"baseLikes": 14200,
+	"likedBy": [
+		"user_demo"
+	],
+	"bookmarkedBy": [
+		"user_demo"
+	],
+	"sharesCount": 412,
+	"creatorId": "user_khanhvy",
+	"hashtags": [
+		"dulichbien",
+		"daiduong",
+		"thiennhien",
+		"khampha"
+	],
+	"category": "travel",
+	"music": {
+		"id": "m1",
+		"title": "Giai Điệu Đại Dương - Ocean Chill",
+		"artist": "Khánh Vy Travel",
+		"duration": "00:30",
+		"audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+		"coverUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-09T10:30:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f18"
+	},
+	"id": "vid_2",
+	"title": "Chú cún cưng nô đùa ngoài bãi biển đầy nắng và gió",
+	"description": "Mỗi lần được dẫn đi dạo biển là chạy nhảy tung tăng không biết mệt luôn 🐶❤️",
+	"videoUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_720/dog.mp4",
+	"thumbnailUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_600/dog.jpg",
+	"duration": "00:13",
+	"views": 342000,
+	"baseLikes": 28900,
+	"likedBy": [],
+	"bookmarkedBy": [],
+	"sharesCount": 820,
+	"creatorId": "user_thucung",
+	"hashtags": [
+		"thucung",
+		"cuncon",
+		"doglover",
+		"vuinhon"
+	],
+	"category": "pets",
+	"music": {
+		"id": "m2",
+		"title": "Sunny Puppy Walk",
+		"artist": "Happy Pets Audio",
+		"duration": "00:45",
+		"audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+		"coverUrl": "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=200&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-09T14:15:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f19"
+	},
+	"id": "vid_3",
+	"title": "Khoảnh khắc hoa nở rực rỡ dưới nắng mai (Timelapse HD)",
+	"description": "Ngắm nhìn từng cánh hoa bung nở đón sương sớm mang lại cảm giác thư thái, bình yên cho tâm hồn 🌸✨",
+	"videoUrl": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+	"thumbnailUrl": "https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=600&auto=format&fit=crop&q=80",
+	"duration": "00:06",
+	"views": 195000,
+	"baseLikes": 19300,
+	"likedBy": [
+		"user_demo"
+	],
+	"bookmarkedBy": [],
+	"sharesCount": 530,
+	"creatorId": "user_bepnhame",
+	"hashtags": [
+		"hoano",
+		"timelapse",
+		"thugiancuoituan",
+		"thiennhien"
+	],
+	"category": "lifestyle",
+	"music": {
+		"id": "m3",
+		"title": "Morning Coffee Acoustic",
+		"artist": "Lo-Fi Kitchen",
+		"duration": "00:30",
+		"audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+		"coverUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=200&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-09T18:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f1a"
+	},
+	"id": "vid_4",
+	"title": "Màn trình diễn trượt ván đường phố cực đỉnh (Street Skateboarding)",
+	"description": "Những cú bật nhảy kỹ thuật và tốc độ đầy năng lượng của các vận động viên trẻ 🛹🔥",
+	"videoUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_720/skate.mp4",
+	"thumbnailUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_600/skate.jpg",
+	"duration": "00:16",
+	"views": 210000,
+	"baseLikes": 16400,
+	"likedBy": [],
+	"bookmarkedBy": [
+		"user_demo"
+	],
+	"sharesCount": 390,
+	"creatorId": "user_hoangnam",
+	"hashtags": [
+		"thethao",
+		"skateboard",
+		"duongpho",
+		"nangluong"
+	],
+	"category": "sports",
+	"music": {
+		"id": "m4",
+		"title": "Street Energy Beats",
+		"artist": "Electro Drive",
+		"duration": "00:40",
+		"audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+		"coverUrl": "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=200&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-10T06:20:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f1b"
+	},
+	"id": "vid_5",
+	"title": "Đàn ngựa phi nước đại giữa thảo nguyên tuyết trắng hùng vĩ",
+	"description": "Khung cảnh mùa đông tuyệt đẹp với đàn ngựa hoang dã tung vó trên cánh đồng tuyết trắng xóa 🐎❄️",
+	"videoUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_720/snow_horses.mp4",
+	"thumbnailUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_600/snow_horses.jpg",
+	"duration": "00:18",
+	"views": 88000,
+	"baseLikes": 7600,
+	"likedBy": [
+		"user_demo"
+	],
+	"bookmarkedBy": [],
+	"sharesCount": 215,
+	"creatorId": "user_demo",
+	"hashtags": [
+		"muadong",
+		"thaonguyen",
+		"dulich",
+		"vlog"
+	],
+	"category": "travel",
+	"music": {
+		"id": "m5",
+		"title": "Winter Wind Symphony",
+		"artist": "Minh Khôi Acoustic",
+		"duration": "00:30",
+		"audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+		"coverUrl": "https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=200&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-10T08:45:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f1c"
+	},
+	"id": "vid_6",
+	"title": "Phim Hoạt Hình 3D Ngắn: Chú Thỏ Khổng Lồ Big Buck Bunny",
+	"description": "Tác phẩm hoạt hình mã nguồn mở nổi tiếng với chất lượng đồ họa 3D sống động và hài hước 🐰🎬",
+	"videoUrl": "https://www.w3schools.com/html/mov_bbb.mp4",
+	"thumbnailUrl": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop&q=80",
+	"duration": "00:10",
+	"views": 520000,
+	"baseLikes": 45100,
+	"likedBy": [],
+	"bookmarkedBy": [],
+	"sharesCount": 1290,
+	"creatorId": "user_baongoc",
+	"hashtags": [
+		"animation3d",
+		"giaitri",
+		"bunny",
+		"phimngan"
+	],
+	"category": "art",
+	"music": {
+		"id": "m6",
+		"title": "Orchestra Fantasy",
+		"artist": "Blender Studio",
+		"duration": "01:00",
+		"audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+		"coverUrl": "https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=200&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-10T09:30:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f1d"
+	},
+	"id": "vid_live_1",
+	"title": "[LIVE] Khám Phá Thế Giới Động Vật Hoang Dã Châu Phi & Săn Quà Tặng",
+	"description": "Phát trực tiếp hành trình safari ngắm nhìn đàn voi châu Phi và giao lưu tặng phụ kiện quay phim!",
+	"videoUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_720/elephants.mp4",
+	"thumbnailUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_600/elephants.jpg",
+	"duration": "LIVE",
+	"views": 94000,
+	"baseLikes": 15800,
+	"likedBy": [],
+	"bookmarkedBy": [],
+	"sharesCount": 640,
+	"creatorId": "user_vclipshop",
+	"hashtags": [
+		"livestream",
+		"vclipmall",
+		"safari",
+		"sandeal"
+	],
+	"category": "streaming",
+	"music": {
+		"id": "m1",
+		"title": "Âm thanh gốc",
+		"artist": "VClip Creator",
+		"duration": "00:30",
+		"audioUrl": "",
+		"coverUrl": ""
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": true,
+	"liveViewerCount": 1480,
+	"liveProduct": {
+		"id": "prod_mic_vclip",
+		"name": "Bộ Mic Thu Âm Vlog Không Dây Pro",
+		"price": 450000,
+		"currency": "đ",
+		"soldCount": 340,
+		"imageUrl": "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=200&auto=format&fit=crop&q=80"
+	},
+	"createdAt": "2026-11-10T11:00:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af3579c04a73b8ef1829f25"
+	},
+	"id": "vid_1794332572990",
+	"title": "Khoảnh khắc thú vị hôm nay ✨",
+	"description": "Video quay thực tế độ phân giải HD chia sẻ lên cộng đồng VClip!",
+	"videoUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_720/sea_turtle.mp4",
+	"thumbnailUrl": "https://res.cloudinary.com/demo/video/upload/q_auto,w_600/sea_turtle.jpg",
+	"duration": "00:18",
+	"views": 1,
+	"baseLikes": 0,
+	"likedBy": [],
+	"bookmarkedBy": [],
+	"sharesCount": 0,
+	"creatorId": "user_demo",
+	"hashtags": [
+		"vclip",
+		"xuhuong",
+		"videohd"
+	],
+	"category": "Thú cưng",
+	"music": {
+		"id": "m_def",
+		"title": "Âm thanh gốc - Nguyễn Minh Khôi",
+		"artist": "Nguyễn Minh Khôi",
+		"duration": "00:15",
+		"audioUrl": "",
+		"coverUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80"
+	},
+	"filter": "none",
+	"privacy": "all",
+	"commentsEnabled": true,
+	"isLive": false,
+	"liveViewerCount": 0,
+	"createdAt": "2026-11-10T17:42:52.991Z",
+	"__v": 0
+}]
+

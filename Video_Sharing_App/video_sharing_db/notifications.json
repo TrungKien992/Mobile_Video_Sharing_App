@@ -1,0 +1,69 @@
+[{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f22"
+	},
+	"id": "notif_1",
+	"userId": "user_demo",
+	"title": "Khánh Vy Travel đã bắt đầu theo dõi bạn 👋",
+	"body": "Hãy ghé thăm trang cá nhân của Khánh Vy để xem các video du lịch mới nhất.",
+	"read": true,
+	"createdAt": "2026-11-10T10:30:00.000Z",
+	"target": {
+		"screen": "creator_profile",
+		"videoId": "",
+		"creatorId": "user_khanhvy"
+	},
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f23"
+	},
+	"id": "notif_2",
+	"userId": "user_demo",
+	"title": "Video của bạn vừa đạt mốc 88.000 lượt xem 🎉",
+	"body": "\"Vlog Cuối Tuần: Dạo phố Sài Gòn\" đang nhận được rất nhiều yêu thích từ cộng đồng.",
+	"read": true,
+	"createdAt": "2026-11-10T09:15:00.000Z",
+	"target": {
+		"screen": "watch",
+		"videoId": "vid_5",
+		"creatorId": ""
+	},
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f24"
+	},
+	"id": "notif_3",
+	"userId": "user_demo",
+	"title": "Trạm Thú Cưng Sài Gòn đã đăng video mới 🐶",
+	"body": "Boss Corgi và buổi chiều dạo chơi công viên cực nhắng nhít.",
+	"read": true,
+	"createdAt": "2026-11-09T14:20:00.000Z",
+	"target": {
+		"screen": "watch",
+		"videoId": "vid_2",
+		"creatorId": ""
+	},
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af3579d04a73b8ef1829f26"
+	},
+	"id": "notif_1794332573054",
+	"userId": "user_demo",
+	"title": "Đăng video thành công! 🎬",
+	"body": "Video \"Khoảnh khắc thú vị hôm nay ✨\" của bạn đã được xuất bản lên VClip.",
+	"read": false,
+	"createdAt": "2026-11-10T17:42:53.054Z",
+	"target": {
+		"screen": "watch",
+		"videoId": "vid_1794332572990",
+		"creatorId": ""
+	},
+	"__v": 0
+}]
+

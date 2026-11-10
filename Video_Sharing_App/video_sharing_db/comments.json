@@ -1,0 +1,87 @@
+[{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f1e"
+	},
+	"id": "cmt_1",
+	"videoId": "vid_1",
+	"userId": "user_thucung",
+	"userName": "Trạm Thú Cưng Sài Gòn",
+	"userAvatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80",
+	"rating": 5,
+	"text": "Góc quay flycam mượt và màu phim đẹp xuất sắc luôn bạn ơi! 🌄👏",
+	"baseLikes": 42,
+	"likedBy": [
+		"user_demo"
+	],
+	"createdAt": "2026-11-10T09:10:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f1f"
+	},
+	"id": "cmt_2",
+	"videoId": "vid_1",
+	"userId": "user_bepnhame",
+	"userName": "Bếp Nhà Mẹ Nấu",
+	"userAvatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80",
+	"rating": 5,
+	"text": "Xem xong chỉ muốn xách balo lên đi du lịch ngay lập tức ❤️",
+	"baseLikes": 19,
+	"likedBy": [],
+	"createdAt": "2026-11-10T10:05:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f20"
+	},
+	"id": "cmt_3",
+	"videoId": "vid_2",
+	"userId": "user_khanhvy",
+	"userName": "Khánh Vy Travel",
+	"userAvatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80",
+	"rating": 5,
+	"text": "Hai cái chân ngắn cũn cỡn chạy nhìn cưng xỉu luôn á 😂🐶",
+	"baseLikes": 85,
+	"likedBy": [
+		"user_demo"
+	],
+	"createdAt": "2026-11-10T10:40:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af303b204a73b8ef1829f21"
+	},
+	"id": "cmt_4",
+	"videoId": "vid_3",
+	"userId": "user_demo",
+	"userName": "Nguyễn Minh Khôi",
+	"userAvatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80",
+	"rating": 5,
+	"text": "Đã làm thử theo công thức của kênh và thành công ngay lần đầu! Cảm ơn Bếp Nhà Mẹ.",
+	"baseLikes": 31,
+	"likedBy": [],
+	"createdAt": "2026-11-10T11:15:00.000Z",
+	"__v": 0
+},
+{
+	"_id": {
+		"$oid": "6af357b504a73b8ef1829f27"
+	},
+	"id": "cmt_1794332597079",
+	"videoId": "vid_1794332572990",
+	"userId": "user_demo",
+	"userName": "Nguyễn Minh Khôi",
+	"userAvatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80",
+	"rating": 5,
+	"text": "ffff",
+	"baseLikes": 0,
+	"likedBy": [
+		"user_demo"
+	],
+	"createdAt": "2026-11-10T17:43:17.079Z",
+	"__v": 5
+}]
+
