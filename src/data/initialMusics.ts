@@ -1,5 +1,14 @@
 import { MusicItem } from '../types';
 
+export const NO_MUSIC_ITEM: MusicItem = {
+  id: 'none',
+  title: 'Không chọn âm thanh',
+  artist: 'Âm thanh gốc',
+  duration: '',
+  audioUrl: '',
+  coverUrl: '',
+};
+
 export const INITIAL_MUSICS: MusicItem[] = [
   {
     id: 'm1',

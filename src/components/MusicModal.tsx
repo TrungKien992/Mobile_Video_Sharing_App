@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer } from 'expo-video';
 import { MusicItem } from '../types';
-import { INITIAL_MUSICS } from '../data/initialMusics';
+import { INITIAL_MUSICS, NO_MUSIC_ITEM } from '../data/initialMusics';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 
@@ -301,6 +301,60 @@ export const MusicModal: React.FC<MusicModalProps> = ({
             </TouchableOpacity>
           </View>
 
+          {/* Lựa chọn Không chọn âm thanh (dùng âm thanh gốc của video) */}
+          <TouchableOpacity
+            style={[
+              styles.musicItemRow,
+              styles.noMusicRow,
+              {
+                borderColor:
+                  !selectedMusicId || selectedMusicId === NO_MUSIC_ITEM.id
+                    ? theme.primary
+                    : theme.border,
+                backgroundColor:
+                  !selectedMusicId || selectedMusicId === NO_MUSIC_ITEM.id
+                    ? 'rgba(255, 42, 109, 0.08)'
+                    : theme.surfaceVariant,
+              },
+            ]}
+            onPress={() => {
+              setPlayingId(null);
+              onSelectMusic(NO_MUSIC_ITEM);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.coverWrapper, styles.noMusicIconWrap, { backgroundColor: theme.surface }]}>
+              <Ionicons name="volume-mute-outline" size={22} color={theme.text} />
+            </View>
+            <View style={styles.musicInfo}>
+              <Text style={[styles.songTitle, { color: theme.text }]}>
+                Không chọn âm thanh
+              </Text>
+              <Text style={[styles.artistText, { color: theme.textSecondary }]}>
+                Giữ nguyên âm thanh gốc từ video
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.useBtn,
+                !selectedMusicId || selectedMusicId === NO_MUSIC_ITEM.id
+                  ? styles.selectedUseBtn
+                  : { borderColor: theme.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.useBtnText,
+                  !selectedMusicId || selectedMusicId === NO_MUSIC_ITEM.id
+                    ? styles.selectedUseBtnText
+                    : { color: theme.primary },
+                ]}
+              >
+                {!selectedMusicId || selectedMusicId === NO_MUSIC_ITEM.id ? 'Đã chọn' : 'Chọn'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
           {/* Music List */}
           <FlatList
             data={filteredMusics}
@@ -398,6 +452,16 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  noMusicRow: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+  },
+  noMusicIconWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   musicItemRow: {
     flexDirection: 'row',

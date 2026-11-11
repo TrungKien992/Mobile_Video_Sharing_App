@@ -16,6 +16,7 @@ import { StorageService } from '../services/storageService';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { EmptyState } from '../components/EmptyState';
 import { HeartButton } from '../components/HeartButton';
+import { VideoThumbnail } from '../components/VideoThumbnail';
 import { confirmDialog } from '../utils/dialog';
 import { formatNumber } from '../utils/format';
 
@@ -124,7 +125,11 @@ export const MyProfileScreen: React.FC = () => {
       activeOpacity={0.85}
       onPress={() => navigateTo({ name: 'watch', videoId: item.id })}
     >
-      <Image source={{ uri: item.thumbnailUrl }} style={styles.gridImage} />
+      <VideoThumbnail
+        thumbnailUrl={item.thumbnailUrl}
+        videoUrl={item.videoUrl}
+        style={styles.gridImage}
+      />
       <View style={styles.cardTopHeart}>
         <HeartButton videoId={item.id} size={14} />
       </View>
@@ -240,21 +245,16 @@ export const MyProfileScreen: React.FC = () => {
                   }
                 >
                   <Text style={[styles.statValue, { color: theme.text }]}>
-                    {formatNumber(currentUser.followers ?? currentUser.followersCount)}
+                    {formatNumber(
+                      Array.isArray(currentUser.followerIds)
+                        ? currentUser.followerIds.length
+                        : (currentUser.followersCount ?? 0)
+                    )}
                   </Text>
                   <Text style={[styles.statLabel, { color: theme.textMuted }]}>
                     Người theo dõi
                   </Text>
                 </TouchableOpacity>
-
-                <View style={styles.statCol}>
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {likedVideoIds.size}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.textMuted }]}>
-                    Đã yêu thích
-                  </Text>
-                </View>
               </View>
 
               {/* Hàng nút chức năng: Chỉnh sửa hồ sơ (BT9.4), Thông báo (BT9.5), Đăng xuất (BT8.3) */}

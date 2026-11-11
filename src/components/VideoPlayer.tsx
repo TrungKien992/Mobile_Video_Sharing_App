@@ -14,6 +14,7 @@ import { useVideoPlayer, VideoView, VideoContentFit } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoCacheService } from '../services/videoCacheService';
 import { resolveMediaUrl } from '../api/client';
+import { getCssFilterForId } from '../data/initialFilters';
 
 interface VideoPlayerProps {
   videoUrl: string;
@@ -21,9 +22,12 @@ interface VideoPlayerProps {
   videoId?: string;
   isPlaying?: boolean;
   isLooping?: boolean;
+  filterId?: string;
   filterOverlayColor?: string;
   resizeMode?: VideoContentFit;
   showControls?: boolean;
+  bottomSafeOffset?: number;
+  topSafeOffset?: number;
   onPress?: () => void;
   onDoubleTap?: () => void;
   onDurationDetected?: (formatted: string) => void;
@@ -43,15 +47,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   videoId,
   isPlaying = true,
   isLooping = true,
+  filterId,
   filterOverlayColor,
   resizeMode = 'cover',
   showControls = true,
+  bottomSafeOffset = 0,
+  topSafeOffset = 0,
   onPress,
   onDoubleTap,
   onDurationDetected,
 }) => {
   const resolvedVideoUrl = resolveMediaUrl(videoUrl);
   const resolvedThumbnailUrl = thumbnailUrl ? resolveMediaUrl(thumbnailUrl) : undefined;
+  const cssFilter = getCssFilterForId(filterId);
 
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const lastTapRef = useRef<number>(0);
@@ -328,18 +336,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              objectFit: resizeMode === 'contain' ? 'contain' : 'cover',
+              filter: cssFilter,
             }}
           />
         </div>
-
-        {/* Lớp phủ bộ lọc màu (Filter Effect) nếu có */}
-        {filterOverlayColor && filterOverlayColor !== 'transparent' && (
-          <View
-            pointerEvents="none"
-            style={[styles.filterOverlay, { backgroundColor: filterOverlayColor }]}
-          />
-        )}
 
         {/* Hiệu ứng Tim bùng nổ khi Double-tap */}
         {showBurstHeart && (
@@ -441,24 +442,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Render trên Native thiết bị di động bằng expo-video
   return (
     <View style={styles.container}>
-      {!hasError ? (
-        <VideoView
-          player={player}
-          contentFit={resizeMode}
-          nativeControls={false}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : (
-        <Image
-          source={{
-            uri:
-              resolvedThumbnailUrl ||
-              'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=600',
-          }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-      )}
+      <View style={styles.videoOnlyLayer}>
+        {!hasError ? (
+          <VideoView
+            player={player}
+            contentFit={resizeMode}
+            nativeControls={false}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : resolvedThumbnailUrl ? (
+          <Image
+            source={{ uri: resolvedThumbnailUrl }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.nativeFallbackBox}>
+            <Ionicons name="videocam-outline" size={40} color="#94A3B8" />
+          </View>
+        )}
+
+        {/* Lớp phủ bộ lọc chỉ áp dụng lên lớp Video */}
+        {filterOverlayColor && filterOverlayColor !== 'transparent' && (
+          <View
+            pointerEvents="none"
+            style={[styles.filterOverlay, { backgroundColor: filterOverlayColor }]}
+          />
+        )}
+      </View>
 
       {/* Vùng chạm toàn màn hình để Play/Pause hoặc Chạm đúp thả tim */}
       <TouchableOpacity
@@ -466,14 +477,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onPress={handleVideoSurfaceTap}
         style={StyleSheet.absoluteFill}
       />
-
-      {/* Lớp phủ bộ lọc */}
-      {filterOverlayColor && filterOverlayColor !== 'transparent' && (
-        <View
-          pointerEvents="none"
-          style={[styles.filterOverlay, { backgroundColor: filterOverlayColor }]}
-        />
-      )}
 
       {/* Hiệu ứng Tim bùng nổ khi Double-tap */}
       {showBurstHeart && (
@@ -507,7 +510,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* Nút bật/tắt tiếng */}
       {showControls && (
         <TouchableOpacity
-          style={styles.muteButton}
+          style={[
+            styles.muteButton,
+            topSafeOffset > 0 && { top: topSafeOffset + 54 },
+          ]}
           onPress={handleToggleMute}
           activeOpacity={0.7}
         >
@@ -522,7 +528,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       {/* Thanh tiến trình có thể chạm hoặc kéo trượt để Tua */}
       {showControls ? (
-        <View style={styles.seekSection}>
+        <View style={[styles.seekSection, bottomSafeOffset > 0 && { bottom: bottomSafeOffset }]}>
           {durationSec > 0 && (
             <View style={styles.timeBadge}>
               <Text style={styles.timeBadgeText}>
@@ -579,6 +585,16 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#000000',
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoOnlyLayer: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
+  },
+  nativeFallbackBox: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
   },

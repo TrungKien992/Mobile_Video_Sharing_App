@@ -60,6 +60,7 @@ export interface AppContextType {
   markNotificationRead: (notifId: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   navigateTo: (route: ScreenRoute) => void;
+  completePostAndWatch: (videoId: string) => void;
   setTab: (tab: MainTabType) => void;
   goBack: () => void;
   refreshVideos: () => Promise<void>;
@@ -142,21 +143,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const likedSet = new Set<string>(
-          dbLikedIds.length > 0 ? dbLikedIds : storedLikedIds
+          activeUserFromDb ? dbLikedIds : storedLikedIds
         );
         const bookmarkedSet = new Set<string>(
-          dbBookmarkedIds.length > 0 ? dbBookmarkedIds : storedBookmarkedIds
+          activeUserFromDb ? dbBookmarkedIds : storedBookmarkedIds
         );
         const followedSet = new Set<string>(
-          activeUserFromDb?.followingIds && activeUserFromDb.followingIds.length > 0
-            ? activeUserFromDb.followingIds
+          activeUserFromDb
+            ? activeUserFromDb.followingIds || []
             : storedFollowedIds
         );
+
+        const commentCountsByVideo = allComments.reduce<Record<string, number>>((acc, c) => {
+          acc[c.videoId] = (acc[c.videoId] || 0) + 1;
+          return acc;
+        }, {});
 
         const syncedVideos = loadedVideos.map((v: VideoItem) => ({
           ...v,
           isLiked: likedSet.has(v.id),
           isBookmarked: bookmarkedSet.has(v.id),
+          commentsCount: commentCountsByVideo[v.id] || 0,
         }));
 
         const syncedCreators = allCreators.map((c: UserProfile) => ({
@@ -237,8 +244,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentTab('home');
       return true;
     }
-    return false;
-  }, [routeHistory, activeRoute, currentTab]);
+      return false;
+    }, [routeHistory, activeRoute, currentTab]);
+
+  const completePostAndWatch = useCallback((videoId: string) => {
+    setRouteHistory((prev) => {
+      const cleaned = prev.filter(
+        (r) => r.name !== 'create_post' && !(r.name === 'main' && r.tab === 'create')
+      );
+      if (cleaned.length === 0) {
+        return [{ name: 'main', tab: 'home' }];
+      }
+      return cleaned;
+    });
+    setCurrentTab('home');
+    setActiveRoute({ name: 'watch', videoId });
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.replaceState) {
+      try {
+        window.history.replaceState({ route: { name: 'watch', videoId } }, '');
+      } catch {}
+    }
+  }, []);
 
   // Hỗ trợ nút Back cứng trên Android & nút Back trình duyệt trên Web
   useEffect(() => {
@@ -432,21 +458,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setFollowedUserIds(new Set<string>(allFollowedIds));
 
     const delta = isFollowed ? 1 : -1;
+    const syncCreatorFollow = (c: UserProfile): UserProfile => {
+      if (c.id !== targetUserId) return c;
+      const existingFollowerIds = Array.isArray(c.followerIds) ? c.followerIds : [];
+      const nextFollowerIds = isFollowed
+        ? Array.from(new Set([...existingFollowerIds, currentUser.id]))
+        : existingFollowerIds.filter((id) => id !== currentUser.id);
+      const nextFollowersCount = Array.isArray(c.followerIds)
+        ? nextFollowerIds.length
+        : Math.max(0, (c.followersCount || 0) + delta);
+      return {
+        ...c,
+        isFollowing: isFollowed,
+        isFollowed,
+        followerIds: nextFollowerIds,
+        followersCount: nextFollowersCount,
+        followers: nextFollowersCount,
+      };
+    };
+
     setCreators((prev) =>
-      prev.map((c) =>
-        c.id === targetUserId
-          ? {
-              ...c,
-              isFollowing: isFollowed,
-              isFollowed,
-              followersCount: Math.max(0, (c.followersCount || 0) + delta),
-              followers: Math.max(0, (c.followers || c.followersCount || 0) + delta),
-            }
-          : c
+      prev.map((c) => {
+        if (c.id === targetUserId) return syncCreatorFollow(c);
+        if (c.id === currentUser.id) {
+          return {
+            ...c,
+            followingIds: allFollowedIds,
+            followingCount: allFollowedIds.length,
+            following: allFollowedIds.length,
+          };
+        }
+        return c;
+      })
+    );
+    setVideos((prev) =>
+      prev.map((v) =>
+        v.creator?.id === targetUserId
+          ? { ...v, creator: syncCreatorFollow(v.creator) }
+          : v
       )
     );
     setCurrentUser((prev) => ({
       ...prev,
+      followingIds: allFollowedIds,
       followingCount: allFollowedIds.length,
       following: allFollowedIds.length,
     }));
@@ -475,7 +529,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return v;
       })
     );
-    showToast(`Đã gửi bình luận & đánh giá ${rating} sao ★`, 'success');
+    showToast('Đã gửi bình luận 💬', 'success');
     return newComment;
   };
 
@@ -514,38 +568,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addNewVideo = async (videoData: Partial<VideoItem>): Promise<VideoItem> => {
+    const chosenMusic = videoData.music;
+    const resolvedMusic =
+      chosenMusic && chosenMusic.id === 'none'
+        ? {
+            id: 'none',
+            title: 'Âm thanh gốc',
+            artist: currentUser.displayName,
+            duration: videoData.duration || '00:15',
+            audioUrl: '',
+            coverUrl: currentUser.avatarUrl,
+          }
+        : chosenMusic || {
+            id: 'none',
+            title: 'Âm thanh gốc',
+            artist: currentUser.displayName,
+            duration: videoData.duration || '00:15',
+            audioUrl: '',
+            coverUrl: currentUser.avatarUrl,
+          };
+
     const newVideoPayload: VideoItem = {
-      id: 'vid_' + Date.now(),
-      title: videoData.title || 'Video mới của tôi',
+      ...videoData,
+      id: videoData.id || 'vid_' + Date.now(),
+      title: videoData.title || '',
       description: videoData.description || '',
-      videoUrl:
-        videoData.videoUrl ||
-        'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/dog.mp4',
-      thumbnailUrl:
-        videoData.thumbnailUrl ||
-        'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=600&auto=format&fit=crop&q=80',
+      videoUrl: videoData.videoUrl || '',
+      thumbnailUrl: videoData.thumbnailUrl || '',
       duration: videoData.duration || '00:15',
-      views: 1,
+      views: 0,
       likes: 0,
       commentsCount: 0,
       sharesCount: 0,
       creator: currentUser,
-      hashtags: videoData.hashtags || ['vclip', 'xuhuong'],
-      category: videoData.category || 'Đời sống',
+      hashtags: Array.isArray(videoData.hashtags) ? videoData.hashtags : [],
+      category: videoData.category || '',
       location: videoData.location || 'Việt Nam',
-      music: videoData.music || {
-        id: 'm_def',
-        title: 'Âm thanh gốc - ' + currentUser.displayName,
-        artist: currentUser.displayName,
-        duration: '00:15',
-        audioUrl: '',
-        coverUrl: currentUser.avatarUrl,
-      },
+      music: resolvedMusic,
       createdAt: 'Vừa xong',
       filter: videoData.filter || 'none',
       isLiked: false,
       isBookmarked: false,
-      ...videoData,
     };
 
     const updatedList = await StorageService.saveNewVideo(newVideoPayload);
@@ -596,10 +659,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notificationService.fetchNotifications(currentUser.id),
     ]);
 
+    const commentCountsByVideo = allComments.reduce<Record<string, number>>((acc, c) => {
+      acc[c.videoId] = (acc[c.videoId] || 0) + 1;
+      return acc;
+    }, {});
+
     const syncedVideos = loadedVideos.map((v: VideoItem) => ({
       ...v,
       isLiked: likedVideoIds.has(v.id),
       isBookmarked: bookmarkedVideoIds.has(v.id),
+      commentsCount: commentCountsByVideo[v.id] || 0,
     }));
 
     setVideos(syncedVideos);
@@ -664,6 +733,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markNotificationRead,
         markAllNotificationsRead,
         navigateTo,
+        completePostAndWatch,
         setTab,
         goBack,
         refreshVideos,

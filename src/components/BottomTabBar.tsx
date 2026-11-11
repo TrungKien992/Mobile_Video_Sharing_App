@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MainTabType } from '../types';
@@ -12,12 +13,19 @@ interface BottomTabBarProps {
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentTab, onSelectTab }) => {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === 'web' ? 6 : Math.max(insets.bottom, 8);
 
   return (
     <View
       style={[
         styles.tabBarContainer,
-        { backgroundColor: theme.surface, borderTopColor: theme.border },
+        {
+          backgroundColor: theme.surface,
+          borderTopColor: theme.border,
+          height: 62 + bottomInset,
+          paddingBottom: bottomInset,
+        },
       ]}
     >
       {/* Tab 1: Khám phá */}
@@ -128,8 +136,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentTab, onSelect
 
 const styles = StyleSheet.create({
   tabBarContainer: {
-    height: Platform.OS === 'ios' ? 76 : 66,
-    paddingBottom: Platform.OS === 'ios' ? 14 : 6,
+    paddingTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',

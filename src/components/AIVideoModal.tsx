@@ -70,7 +70,7 @@ export const AIVideoModal: React.FC<AIVideoModalProps> = ({
         id: `welcome_${video.id}`,
         sender: 'ai',
         text: `👋 Xin chào! Mình là Trợ lý Google AI trên VClip ✨\nBạn đang xem video "${video.title}" của kênh @${video.creator.displayName}.\n\nBạn có thể nhắn tin hỏi trực tiếp mình bất cứ điều gì ở ô chat bên dưới, hoặc chọn nhanh các gợi ý nhé!`,
-        suggestedComment: `Video "${video.title}" cuốn quá @${video.creator.displayName} ơi! Thả 5 sao luôn ⭐❤️`,
+        suggestedComment: `Video "${video.title}" cuốn quá @${video.creator.displayName} ơi! ❤️`,
         time: getNowTime(),
       },
     ]);
@@ -279,7 +279,7 @@ export const AIVideoModal: React.FC<AIVideoModalProps> = ({
                           <Text
                             style={[styles.suggestLabel, { color: theme.textMuted }]}
                           >
-                            💬 Bình luận gợi ý (5★):
+                            💬 Bình luận gợi ý:
                           </Text>
                           <Text
                             style={[styles.suggestText, { color: theme.text }]}

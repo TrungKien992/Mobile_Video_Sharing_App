@@ -52,13 +52,16 @@ export const FollowListScreen: React.FC<FollowListScreenProps> = ({
       : otherUsers.filter((c) => (targetUser.followingIds || []).includes(c.id));
 
   const followersList = otherUsers.filter((c) => {
-    if (Array.isArray(targetUser.followerIds) && targetUser.followerIds.length > 0) {
-      return targetUser.followerIds.includes(c.id);
+    if (Array.isArray(targetUser.followerIds) && targetUser.followerIds.includes(c.id)) {
+      return true;
+    }
+    if (c.id === currentUser.id && targetUser.id !== currentUser.id) {
+      return followedUserIds.has(targetUser.id);
     }
     if (Array.isArray(c.followingIds) && c.followingIds.includes(targetUser.id)) {
       return true;
     }
-    return followedUserIds.has(c.id);
+    return false;
   });
 
   const currentDisplayList = (
@@ -92,7 +95,13 @@ export const FollowListScreen: React.FC<FollowListScreenProps> = ({
               {item.displayName}
             </Text>
             <Text style={[styles.userHandle, { color: theme.textMuted }]}>
-              @{item.username} • {formatNumber(item.followers ?? item.followersCount)} followers
+              @{item.username} •{' '}
+              {formatNumber(
+                Array.isArray(item.followerIds)
+                  ? item.followerIds.length
+                  : (item.followersCount ?? 0)
+              )}{' '}
+              người theo dõi
             </Text>
           </View>
         </TouchableOpacity>

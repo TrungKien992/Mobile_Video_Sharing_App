@@ -13,6 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { VideoItem } from '../types';
 import { HeartButton } from '../components/HeartButton';
 import { EmptyState } from '../components/EmptyState';
+import { VideoThumbnail } from '../components/VideoThumbnail';
 import { formatNumber } from '../utils/format';
 import { showMessage } from '../utils/dialog';
 
@@ -52,7 +53,11 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
       activeOpacity={0.85}
       onPress={() => navigateTo({ name: 'watch', videoId: item.id })}
     >
-      <Image source={{ uri: item.thumbnailUrl }} style={styles.gridImage} />
+      <VideoThumbnail
+        thumbnailUrl={item.thumbnailUrl}
+        videoUrl={item.videoUrl}
+        style={styles.gridImage}
+      />
       <View style={styles.heartPos}>
         <HeartButton videoId={item.id} size={14} />
       </View>
@@ -113,7 +118,11 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
                 }
               >
                 <Text style={[styles.statNum, { color: theme.text }]}>
-                  {formatNumber(creator.following ?? creator.followingCount)}
+                  {formatNumber(
+                    Array.isArray(creator.followingIds)
+                      ? creator.followingIds.length
+                      : (creator.followingCount ?? 0)
+                  )}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textMuted }]}>
                   Đang theo dõi
@@ -130,7 +139,11 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
                 }
               >
                 <Text style={[styles.statNum, { color: theme.text }]}>
-                  {formatNumber(creator.followers ?? creator.followersCount)}
+                  {formatNumber(
+                    Array.isArray(creator.followerIds)
+                      ? creator.followerIds.length
+                      : (creator.followersCount ?? 0)
+                  )}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textMuted }]}>
                   Người theo dõi
@@ -138,7 +151,9 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
               </TouchableOpacity>
               <View style={styles.statCol}>
                 <Text style={[styles.statNum, { color: theme.text }]}>
-                  {formatNumber(creator.likes ?? creator.likesCount)}
+                  {formatNumber(
+                    creatorVideos.reduce((sum, v) => sum + (v.likes || 0), 0)
+                  )}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textMuted }]}>
                   Lượt thích

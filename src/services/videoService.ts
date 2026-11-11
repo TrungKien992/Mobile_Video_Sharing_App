@@ -25,34 +25,35 @@ export async function createVideo(
     await StorageService.saveNewVideo(created);
     return created;
   } catch {
+    const chosenMusic = payload.music;
+    const resolvedMusic =
+      chosenMusic && chosenMusic.id !== 'none'
+        ? chosenMusic
+        : {
+            id: 'none',
+            title: 'Âm thanh gốc',
+            artist: payload.creator?.displayName || 'VClip Creator',
+            duration: payload.duration || '00:20',
+            audioUrl: '',
+            coverUrl: payload.creator?.avatarUrl || '',
+          };
     const fallbackVideo: VideoItem = {
       id: 'vid_' + Date.now(),
       title: payload.title || 'Video mới',
       description: payload.description || '',
-      videoUrl:
-        payload.videoUrl ||
-        'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/dog.mp4',
-      thumbnailUrl:
-        payload.thumbnailUrl ||
-        'https://res.cloudinary.com/demo/video/upload/q_auto,w_600/dog.jpg',
+      videoUrl: payload.videoUrl || '',
+      thumbnailUrl: payload.thumbnailUrl || '',
       duration: payload.duration || '00:20',
-      views: 1,
+      views: 0,
       likes: 0,
       commentsCount: 0,
       sharesCount: 0,
       creator: payload.creator!,
-      hashtags: payload.hashtags || ['vclip', 'xuhuong'],
-      music: payload.music || {
-        id: 'm_orig',
-        title: 'Âm thanh gốc',
-        artist: payload.creator?.displayName || 'VClip Creator',
-        duration: '00:20',
-        audioUrl: '',
-        coverUrl: payload.creator?.avatarUrl || '',
-      },
+      hashtags: Array.isArray(payload.hashtags) ? payload.hashtags : [],
+      music: resolvedMusic,
       createdAt: new Date().toISOString(),
       filter: payload.filter || 'none',
-      category: payload.category || 'trending',
+      category: payload.category || '',
       privacy: payload.privacy || 'all',
       commentsEnabled: payload.commentsEnabled !== false,
       isLiked: false,

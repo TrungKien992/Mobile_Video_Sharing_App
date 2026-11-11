@@ -16,15 +16,15 @@ import { VideoItem, UserProfile } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
 import { HeartButton } from '../components/HeartButton';
 import { EmptyState } from '../components/EmptyState';
+import { VideoThumbnail } from '../components/VideoThumbnail';
 import { formatNumber } from '../utils/format';
 
-type SearchCategoryTab = 'all' | 'trending' | 'accounts' | 'liked';
+type SearchCategoryTab = 'all' | 'trending' | 'accounts';
 
 export const SearchScreen: React.FC = () => {
   const {
     videos,
     creators,
-    likedVideoIds,
     followedUserIds,
     searchPresetQuery,
     clearSearchPresetQuery,
@@ -49,9 +49,8 @@ export const SearchScreen: React.FC = () => {
 
   const query = debouncedQuery.toLowerCase().trim();
 
-  // Lọc video theo từ khóa tìm kiếm đã debounce và tab
+  // Lọc video theo từ khóa tìm kiếm đã debounce
   const filteredVideos = videos.filter((v) => {
-    if (activeTab === 'liked' && !likedVideoIds.has(v.id)) return false;
     if (!query) return true;
     const matchTitle = v.title.toLowerCase().includes(query);
     const matchDesc = v.description.toLowerCase().includes(query);
@@ -101,7 +100,11 @@ export const SearchScreen: React.FC = () => {
       }}
     >
       <View style={styles.thumbnailContainer}>
-        <Image source={{ uri: item.thumbnailUrl }} style={styles.gridThumbnail} />
+        <VideoThumbnail
+          thumbnailUrl={item.thumbnailUrl}
+          videoUrl={item.videoUrl}
+          style={styles.gridThumbnail}
+        />
         <View style={styles.heartOverlayPos}>
           <HeartButton videoId={item.id} size={16} />
         </View>
@@ -157,7 +160,11 @@ export const SearchScreen: React.FC = () => {
             {item.displayName}
           </Text>
           <Text style={[styles.creatorCardHandle, { color: theme.textMuted }]}>
-            @{item.username} • {formatNumber(item.followers ?? item.followersCount)} người theo dõi
+            @{item.username} •{' '}
+            {formatNumber(
+              Array.isArray(item.followerIds) ? item.followerIds.length : (item.followersCount ?? 0)
+            )}{' '}
+            người theo dõi
           </Text>
           <Text
             style={[styles.creatorCardBio, { color: theme.textSecondary }]}
@@ -263,7 +270,6 @@ export const SearchScreen: React.FC = () => {
             { key: 'all', label: `Tất cả (${filteredVideos.length})` },
             { key: 'trending', label: '🔥 Thịnh hành' },
             { key: 'accounts', label: `👤 Tác giả (${filteredCreators.length})` },
-            { key: 'liked', label: `❤️ Đã thích (${likedVideoIds.size})` },
           ].map((tab) => {
             const isSelected = activeTab === tab.key;
             return (

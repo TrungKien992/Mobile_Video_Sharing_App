@@ -17,6 +17,7 @@ import { INITIAL_MUSICS } from '../data/initialMusics';
 import { VideoItem, MusicItem, UserProfile } from '../types';
 import { HeartButton } from '../components/HeartButton';
 import { EmptyState } from '../components/EmptyState';
+import { VideoThumbnail } from '../components/VideoThumbnail';
 import { formatNumber } from '../utils/format';
 
 const CATEGORY_ALIASES: Record<string, string[]> = {
@@ -168,8 +169,9 @@ export const HomeScreen: React.FC = () => {
             activeOpacity={0.9}
             onPress={() => handleOpenVideo(featuredVideo)}
           >
-            <Image
-              source={{ uri: featuredVideo.thumbnailUrl }}
+            <VideoThumbnail
+              thumbnailUrl={featuredVideo.thumbnailUrl}
+              videoUrl={featuredVideo.videoUrl}
               style={styles.heroImage}
             />
             <LinearGradient
@@ -288,8 +290,9 @@ export const HomeScreen: React.FC = () => {
               onPress={() => handleOpenVideo(video)}
             >
               <View style={styles.cardThumbWrap}>
-                <Image
-                  source={{ uri: video.thumbnailUrl }}
+                <VideoThumbnail
+                  thumbnailUrl={video.thumbnailUrl}
+                  videoUrl={video.videoUrl}
                   style={styles.cardThumb}
                 />
                 <LinearGradient
@@ -369,7 +372,11 @@ export const HomeScreen: React.FC = () => {
             activeOpacity={0.85}
             onPress={() => navigateTo({ name: 'live', videoId: item.id })}
           >
-            <Image source={{ uri: item.thumbnailUrl }} style={styles.liveImg} />
+            <VideoThumbnail
+              thumbnailUrl={item.thumbnailUrl}
+              videoUrl={item.videoUrl}
+              style={styles.liveImg}
+            />
             <View
               style={[
                 styles.liveBadge,
@@ -389,7 +396,9 @@ export const HomeScreen: React.FC = () => {
                 {item.title}
               </Text>
               <Text style={styles.liveViewerCount}>
-                🔥 {formatNumber(item.liveViewerCount || item.views)} người đang xem
+                {item.isLive
+                  ? `🔥 ${formatNumber(item.liveViewerCount || 0)} người đang xem`
+                  : `👁 ${formatNumber(item.views)} lượt xem`}
               </Text>
             </LinearGradient>
           </TouchableOpacity>

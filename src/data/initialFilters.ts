@@ -73,3 +73,27 @@ export const INITIAL_FILTERS: FilterItem[] = [
     sampleThumbnail: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
   },
 ];
+
+export function getCssFilterForId(filterId?: string): string {
+  switch (filterId) {
+    case 'film':
+      return 'sepia(0.28) brightness(1.05) contrast(1.15) saturate(1.2)';
+    case 'bw':
+      return 'grayscale(1) contrast(1.3)';
+    case 'natural':
+      return 'brightness(1.08) contrast(1.05) saturate(1.1)';
+    case 'art':
+      return 'saturate(1.45) contrast(1.25) hue-rotate(-18deg)';
+    case 'vintage':
+      return 'sepia(0.5) saturate(0.85) contrast(1.1)';
+    case 'spring':
+      return 'brightness(1.12) saturate(1.35) sepia(0.12)';
+    case 'baby':
+      return 'brightness(1.15) contrast(0.95) saturate(1.08)';
+    case 'contrast':
+      return 'contrast(1.45) brightness(1.05)';
+    case 'none':
+    default:
+      return 'none';
+  }
+}

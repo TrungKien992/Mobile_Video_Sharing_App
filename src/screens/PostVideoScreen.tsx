@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,10 @@ import {
   TextInput,
   TouchableOpacity,
   Switch,
-  Image,
   Platform,
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,9 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { StorageService } from '../services/storageService';
-import { SAMPLE_UPLOAD_VIDEOS } from '../data/initialVideos';
 import { INITIAL_FILTERS } from '../data/initialFilters';
-import { INITIAL_MUSICS } from '../data/initialMusics';
+import { INITIAL_MUSICS, NO_MUSIC_ITEM } from '../data/initialMusics';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { FilterModal } from '../components/FilterModal';
 import { MusicModal } from '../components/MusicModal';
@@ -33,51 +33,34 @@ interface PostVideoScreenProps {
   selectedMusicId?: string;
 }
 
-const CATEGORIES = [
-  'Thú cưng',
-  'Thể thao',
-  'Thiên nhiên',
-  'Ẩm thực',
-  'Giải trí',
-  'Đời sống',
-];
-
 export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   draftVideoUri,
   selectedFilterId,
   selectedMusicId,
 }) => {
-  const { addNewVideo, goBack, navigateTo } = useApp();
+  const { videos, addNewVideo, goBack, completePostAndWatch } = useApp();
   const { theme } = useTheme();
 
-  const initialSample =
-    SAMPLE_UPLOAD_VIDEOS.find((s) => s.videoUrl === draftVideoUri) ||
-    SAMPLE_UPLOAD_VIDEOS[0];
-
-  const [videoUrl, setVideoUrl] = useState<string>(
-    draftVideoUri || initialSample.videoUrl
-  );
-  const [coverPhotoUri, setCoverPhotoUri] = useState<string>(
-    initialSample.thumbnailUrl
-  );
+  const [videoUrl, setVideoUrl] = useState<string>(draftVideoUri || '');
+  const [coverPhotoUri, setCoverPhotoUri] = useState<string>('');
   const [selectedFilter, setSelectedFilter] = useState<FilterItem>(
     () => INITIAL_FILTERS.find((f) => f.id === selectedFilterId) || INITIAL_FILTERS[0]
   );
   const [selectedMusic, setSelectedMusic] = useState<MusicItem>(
-    () => INITIAL_MUSICS.find((m) => m.id === selectedMusicId) || INITIAL_MUSICS[0]
+    () =>
+      selectedMusicId === NO_MUSIC_ITEM.id
+        ? NO_MUSIC_ITEM
+        : INITIAL_MUSICS.find((m) => m.id === selectedMusicId) || NO_MUSIC_ITEM
   );
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [musicModalOpen, setMusicModalOpen] = useState(false);
 
-  const [title, setTitle] = useState<string>('Khoảnh khắc thú vị hôm nay ✨');
-  const [description, setDescription] = useState<string>(
-    'Video quay thực tế độ phân giải HD chia sẻ lên cộng đồng VClip!'
-  );
-  const [category, setCategory] = useState<string>('Thú cưng');
-  const [hashtags, setHashtags] = useState<string[]>(['vclip', 'xuhuong', 'videohd']);
+  const [title, setTitle] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [commentsEnabled, setCommentsEnabled] = useState(true);
-  const [videoDuration, setVideoDuration] = useState<string>('00:18');
+  const [videoDuration, setVideoDuration] = useState<string>('00:15');
   const [publishing, setPublishing] = useState(false);
   const [uploadingLocal, setUploadingLocal] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -89,20 +72,57 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   const [aiGenerating, setAiGenerating] = useState<boolean>(false);
   const [aiSourceLabel, setAiSourceLabel] = useState<string>('');
 
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
+  const formCardYRef = useRef(0);
+  const fieldOffsetsRef = useRef<Record<string, number>>({});
+  const activeFieldRef = useRef<'ai' | 'title' | 'desc' | 'hashtag' | null>(null);
+
+  const scrollToField = useCallback((fieldKey: 'ai' | 'title' | 'desc' | 'hashtag', delayMs = 120) => {
+    const relY = fieldOffsetsRef.current[fieldKey];
+    if (relY === undefined) return;
+    const targetY = Math.max(0, formCardYRef.current + relY - 80);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+    }, delayMs);
+  }, []);
+
+  const handleFieldFocus = useCallback(
+    (fieldKey: 'ai' | 'title' | 'desc' | 'hashtag') => {
+      activeFieldRef.current = fieldKey;
+      scrollToField(fieldKey, 150);
+    },
+    [scrollToField]
+  );
 
   useEffect(() => {
     StorageService.getDrafts().then(setSavedDrafts);
   }, []);
 
-  const handleSelectSample = (sample: (typeof SAMPLE_UPLOAD_VIDEOS)[0]) => {
-    setVideoUrl(sample.videoUrl);
-    setCoverPhotoUri(sample.thumbnailUrl);
-    if (!title.trim() || title === 'Khoảnh khắc thú vị hôm nay ✨') {
-      setTitle(sample.label);
-    }
-  };
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const h = e?.endCoordinates?.height || 0;
+      setKeyboardHeight(h);
+      if (activeFieldRef.current) {
+        scrollToField(activeFieldRef.current, 60);
+      }
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      activeFieldRef.current = null;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToField]);
 
   const handleWebFileUpload = async (event: any) => {
     const file = event.target?.files?.[0];
@@ -112,20 +132,46 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
     try {
       const res = await uploadFile(file);
       setVideoUrl(res.url);
-      if (!title.trim() || title === 'Khoảnh khắc thú vị hôm nay ✨') {
-        setTitle(file.name.replace(/\.[^/.]+$/, ''));
-      }
-      showMessage(
-        'Đã tải file lên Server ✅',
-        `File "${file.name}" đã được lưu tại ${res.url}`
-      );
+      showToast('Đã tải video lên thành công ✅', 'success');
     } catch {
       const localUrl = URL.createObjectURL(file);
       setVideoUrl(localUrl);
-      showMessage('Đã nạp video', `Đã chọn file "${file.name}" từ máy tính.`);
+      showToast('Đã chọn video từ máy tính', 'info');
     } finally {
       setUploadingLocal(false);
     }
+  };
+
+  const handlePickVideoFile = async () => {
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['videos'],
+        allowsEditing: true,
+        quality: 1,
+        videoMaxDuration: 60,
+      });
+      if (!result.canceled && result.assets?.length) {
+        const asset = result.assets[0];
+        setUploadingLocal(true);
+        try {
+          const uploaded = await uploadFile({
+            uri: asset.uri,
+            name: `video_${Date.now()}.mp4`,
+            type: 'video/mp4',
+          });
+          setVideoUrl(uploaded.url);
+        } catch {
+          setVideoUrl(asset.uri);
+        } finally {
+          setUploadingLocal(false);
+        }
+        showToast('Đã chọn video mới', 'success');
+      }
+    } catch {}
   };
 
   const handleWebCoverUpload = async (event: any) => {
@@ -178,14 +224,61 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
     } catch {}
   };
 
-  const handleAddHashtag = () => {
-    if (newTagInput.trim()) {
-      const cleanTag = newTagInput.replace('#', '').trim();
-      if (!hashtags.includes(cleanTag)) {
-        setHashtags([...hashtags, cleanTag]);
-      }
-      setNewTagInput('');
+  const existingHashtags = useMemo(() => {
+    const tagMap = new Map<string, { tag: string; count: number }>();
+    videos.forEach((v) => {
+      (v.hashtags || []).forEach((raw) => {
+        const clean = String(raw || '').replace(/#/g, '').trim();
+        if (!clean) return;
+        const key = clean.toLowerCase();
+        const prev = tagMap.get(key);
+        if (prev) {
+          prev.count += 1;
+        } else {
+          tagMap.set(key, { tag: clean, count: 1 });
+        }
+      });
+    });
+    return Array.from(tagMap.values()).sort(
+      (a, b) => b.count - a.count || a.tag.localeCompare(b.tag)
+    );
+  }, [videos]);
+
+  const hashtagSuggestions = useMemo(() => {
+    const raw = newTagInput.trim();
+    if (!raw) return [];
+    const query = raw.replace(/#/g, '').trim().toLowerCase();
+    const selectedSet = new Set(hashtags.map((t) => t.toLowerCase()));
+
+    const available = existingHashtags.filter(
+      (item) => !selectedSet.has(item.tag.toLowerCase())
+    );
+    if (!query) {
+      return available.slice(0, 8);
     }
+
+    return available
+      .filter((item) => item.tag.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const aPrefix = a.tag.toLowerCase().startsWith(query) ? 1 : 0;
+        const bPrefix = b.tag.toLowerCase().startsWith(query) ? 1 : 0;
+        if (aPrefix !== bPrefix) return bPrefix - aPrefix;
+        return b.count - a.count;
+      })
+      .slice(0, 8);
+  }, [existingHashtags, hashtags, newTagInput]);
+
+  const appendHashtag = (rawTag: string) => {
+    const cleanTag = rawTag.replace(/#/g, '').trim();
+    if (!cleanTag) return;
+    if (!hashtags.some((t) => t.toLowerCase() === cleanTag.toLowerCase())) {
+      setHashtags((prev) => [...prev, cleanTag]);
+    }
+    setNewTagInput('');
+  };
+
+  const handleAddHashtag = () => {
+    appendHashtag(newTagInput);
   };
 
   const handleRemoveHashtag = (tagToRemove: string) => {
@@ -195,13 +288,10 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   const handleGenerateByGoogleAI = async () => {
     setAiGenerating(true);
     try {
-      const topicSeed =
-        aiTopicPrompt.trim() ||
-        (title !== 'Khoảnh khắc thú vị hôm nay ✨' ? title : '') ||
-        category;
+      const topicSeed = aiTopicPrompt.trim() || title.trim() || 'video ngắn';
       const result = await generateAICaption({
         topic: topicSeed,
-        category,
+        category: '',
         style: aiStyle,
       });
       if (result.title) setTitle(result.title);
@@ -226,7 +316,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
       videoUri: videoUrl,
       coverUri: coverPhotoUri,
       hashtags,
-      category,
+      category: '',
       filter: selectedFilter.id,
       musicId: selectedMusic.id,
       commentsEnabled,
@@ -239,21 +329,22 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
       createdAt: new Date().toISOString(),
     });
     setSavedDrafts(updated);
-    showToast('Đã lưu bản nháp (kèm bộ lọc & nhạc) vào bộ nhớ 📂', 'success');
+    showToast('Đã lưu bản nháp vào bộ nhớ 📂', 'success');
   };
 
   const handleLoadDraft = (draft: VideoDraft) => {
-    setTitle(draft.title);
-    setDescription(draft.description);
+    setTitle(draft.title || '');
+    setDescription(draft.description || '');
     if (draft.videoUri) setVideoUrl(draft.videoUri);
-    if (draft.coverUri) setCoverPhotoUri(draft.coverUri);
-    if (draft.hashtags?.length) setHashtags(draft.hashtags);
-    if (draft.category) setCategory(draft.category);
+    setCoverPhotoUri(draft.coverUri || '');
+    setHashtags(Array.isArray(draft.hashtags) ? draft.hashtags : []);
     if (draft.filter) {
       const f = INITIAL_FILTERS.find((item) => item.id === draft.filter);
       if (f) setSelectedFilter(f);
     }
-    if (draft.musicId) {
+    if (draft.musicId === NO_MUSIC_ITEM.id) {
+      setSelectedMusic(NO_MUSIC_ITEM);
+    } else if (draft.musicId) {
       const m = INITIAL_MUSICS.find((item) => item.id === draft.musicId);
       if (m) setSelectedMusic(m);
     }
@@ -273,7 +364,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
       return;
     }
     if (!videoUrl.trim()) {
-      showMessage('Thiếu video', 'Vui lòng chọn hoặc tải lên một video!');
+      showMessage('Thiếu video', 'Vui lòng quay hoặc chọn một video để đăng!');
       return;
     }
 
@@ -281,22 +372,19 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
     try {
       const created = await addNewVideo({
         title: title.trim(),
-        description: description.trim() || title.trim(),
+        description: description.trim(),
         videoUrl: videoUrl.trim(),
         thumbnailUrl: coverPhotoUri,
-        category,
+        category: '',
         hashtags,
         filter: selectedFilter.id,
         music: selectedMusic,
         commentsEnabled,
-        duration: videoDuration || '00:18',
+        duration: videoDuration || '00:15',
       });
 
-      showMessage(
-        'Đăng video thành công! 🎉',
-        `Video "${created.title}" (Bộ lọc: ${selectedFilter.nameVi}, Nhạc: ${selectedMusic.title}) đã được lưu vào MongoDB!`
-      );
-      navigateTo({ name: 'watch', videoId: created.id });
+      showMessage('Đăng thành công', 'Video của bạn đã được đăng thành công.');
+      completePostAndWatch(created.id);
     } catch (err: any) {
       showMessage('Lỗi đăng video', err?.message || 'Không thể đăng video');
     } finally {
@@ -305,7 +393,11 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: theme.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 20}
+    >
       {Platform.OS === 'web' && (
         <>
           {/* @ts-ignore */}
@@ -344,8 +436,13 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[
+          styles.scrollContent,
+          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 60 },
+        ]}
       >
         {/* Danh sách bản nháp đã lưu (nếu có) */}
         {savedDrafts.length > 0 && (
@@ -404,6 +501,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                   isPlaying={true}
                   isLooping={true}
                   showControls={false}
+                  filterId={selectedFilter.id}
                   filterOverlayColor={selectedFilter.overlayColor}
                   onDurationDetected={(formatted) => {
                     if (formatted && formatted !== '00:00') {
@@ -413,7 +511,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                 />
                 <View style={styles.realBadge}>
                   <Text style={styles.realBadgeText}>
-                    LIVE • {videoDuration}
+                    {videoDuration}
                   </Text>
                 </View>
               </View>
@@ -430,7 +528,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                   <>
                     <Ionicons name="image-outline" size={14} color={theme.primary} />
                     <Text style={[styles.changeCoverText, { color: theme.primary }]}>
-                      Đổi ảnh bìa
+                      {coverPhotoUri ? 'Đổi ảnh bìa' : 'Chọn ảnh bìa (tuỳ chọn)'}
                     </Text>
                   </>
                 )}
@@ -439,69 +537,31 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
 
             <View style={styles.sourcePickCol}>
               <Text style={[styles.sourceTitle, { color: theme.text }]}>
-                Nguồn Video (.MP4 thực)
+                Video của bạn
               </Text>
               <Text style={[styles.sourceSub, { color: theme.textSecondary }]}>
-                Tải file video từ máy hoặc chọn nhanh video mẫu:
+                {videoUrl
+                  ? 'Đã sẵn sàng xem trước. Bạn có thể chọn lại video khác từ thiết bị nếu muốn:'
+                  : 'Chưa có video. Hãy quay bằng camera hoặc chọn video từ thiết bị của bạn:'}
               </Text>
 
-              {Platform.OS === 'web' && (
-                <TouchableOpacity
-                  style={[styles.uploadPCBtn, { backgroundColor: theme.primary }]}
-                  onPress={() => fileInputRef.current?.click()}
-                  disabled={uploadingLocal}
-                  activeOpacity={0.85}
-                >
-                  {uploadingLocal ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="folder-open-outline" size={16} color="#FFFFFF" />
-                      <Text style={styles.uploadPCText}>
-                        Chọn file .MP4 từ máy tính
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-
-              <Text style={[styles.sampleHeader, { color: theme.textMuted }]}>
-                Hoặc chọn nhanh kho Video mẫu HD:
-              </Text>
-              <View style={styles.sampleList}>
-                {SAMPLE_UPLOAD_VIDEOS.map((s) => {
-                  const selected = videoUrl === s.videoUrl;
-                  return (
-                    <TouchableOpacity
-                      key={s.id}
-                      style={[
-                        styles.sampleChip,
-                        {
-                          backgroundColor: selected
-                            ? theme.primaryLight
-                            : theme.surfaceVariant,
-                          borderColor: selected ? theme.primary : 'transparent',
-                        },
-                      ]}
-                      onPress={() => handleSelectSample(s)}
-                    >
-                      <Image
-                        source={{ uri: s.thumbnailUrl }}
-                        style={styles.sampleChipThumb}
-                      />
-                      <Text
-                        style={[
-                          styles.sampleChipLabel,
-                          { color: selected ? theme.primary : theme.text },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {s.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <TouchableOpacity
+                style={[styles.uploadPCBtn, { backgroundColor: theme.primary }]}
+                onPress={handlePickVideoFile}
+                disabled={uploadingLocal}
+                activeOpacity={0.85}
+              >
+                {uploadingLocal ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="folder-open-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.uploadPCText}>
+                      {videoUrl ? 'Chọn video khác từ máy' : 'Chọn video từ máy'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -545,6 +605,9 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
             styles.formCard,
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
+          onLayout={(e) => {
+            formCardYRef.current = e.nativeEvent.layout.y;
+          }}
         >
           {/* Khung Trợ lý Google AI tạo Caption & Hashtag tự động */}
           <View
@@ -555,6 +618,9 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                 borderColor: theme.primary,
               },
             ]}
+            onLayout={(e) => {
+              fieldOffsetsRef.current.ai = e.nativeEvent.layout.y;
+            }}
           >
             <View style={styles.aiHeaderRow}>
               <View style={styles.aiTitleLeft}>
@@ -586,6 +652,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
               placeholderTextColor={theme.textMuted}
               value={aiTopicPrompt}
               onChangeText={setAiTopicPrompt}
+              onFocus={() => handleFieldFocus('ai')}
             />
 
             <View style={styles.aiStyleRow}>
@@ -654,7 +721,12 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
             </TouchableOpacity>
           </View>
 
-          <View style={styles.formGroup}>
+          <View
+            style={styles.formGroup}
+            onLayout={(e) => {
+              fieldOffsetsRef.current.title = e.nativeEvent.layout.y;
+            }}
+          >
             <Text style={[styles.inputLabel, { color: theme.text }]}>
               Tiêu đề video *
             </Text>
@@ -667,10 +739,16 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
               placeholderTextColor={theme.textMuted}
               value={title}
               onChangeText={setTitle}
+              onFocus={() => handleFieldFocus('title')}
             />
           </View>
 
-          <View style={styles.formGroup}>
+          <View
+            style={styles.formGroup}
+            onLayout={(e) => {
+              fieldOffsetsRef.current.desc = e.nativeEvent.layout.y;
+            }}
+          >
             <Text style={[styles.inputLabel, { color: theme.text }]}>
               Mô tả nội dung
             </Text>
@@ -683,49 +761,19 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
               placeholderTextColor={theme.textMuted}
               value={description}
               onChangeText={setDescription}
+              onFocus={() => handleFieldFocus('desc')}
               multiline
               numberOfLines={3}
             />
           </View>
 
-          {/* Chủ đề */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>
-              Danh mục chủ đề
-            </Text>
-            <View style={styles.catRow}>
-              {CATEGORIES.map((c) => {
-                const active = category === c;
-                return (
-                  <TouchableOpacity
-                    key={c}
-                    onPress={() => setCategory(c)}
-                    style={[
-                      styles.catChip,
-                      {
-                        backgroundColor: active
-                          ? theme.primary
-                          : theme.surfaceVariant,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: '700',
-                        color: active ? '#FFFFFF' : theme.textSecondary,
-                      }}
-                    >
-                      {c}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
           {/* Hashtags */}
-          <View style={styles.formGroup}>
+          <View
+            style={styles.formGroup}
+            onLayout={(e) => {
+              fieldOffsetsRef.current.hashtag = e.nativeEvent.layout.y;
+            }}
+          >
             <Text style={[styles.inputLabel, { color: theme.text }]}>
               Thẻ Hashtag (#)
             </Text>
@@ -758,6 +806,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                 placeholderTextColor={theme.textMuted}
                 value={newTagInput}
                 onChangeText={setNewTagInput}
+                onFocus={() => handleFieldFocus('hashtag')}
                 onSubmitEditing={handleAddHashtag}
               />
               <TouchableOpacity
@@ -768,11 +817,48 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                 <Ionicons name="add" size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
+
+            {hashtagSuggestions.length > 0 && (
+              <View
+                style={[
+                  styles.suggestionBox,
+                  {
+                    backgroundColor: theme.surfaceVariant,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.suggestionHeader, { color: theme.textMuted }]}>
+                  Gợi ý hashtag đang có
+                </Text>
+                {hashtagSuggestions.map((item, idx) => (
+                  <TouchableOpacity
+                    key={item.tag}
+                    style={[
+                      styles.suggestionItem,
+                      idx < hashtagSuggestions.length - 1 && {
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: theme.border,
+                      },
+                    ]}
+                    onPress={() => appendHashtag(item.tag)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.suggestionTagText, { color: theme.primary }]}>
+                      #{item.tag}
+                    </Text>
+                    <Text style={[styles.suggestionCountText, { color: theme.textMuted }]}>
+                      {item.count} video
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={[styles.settingRow, { borderTopColor: theme.border }]}>
             <Text style={[styles.settingLabel, { color: theme.text }]}>
-              Cho phép người xem bình luận & đánh giá sao
+              Cho phép người xem bình luận
             </Text>
             <Switch
               value={commentsEnabled}
@@ -852,7 +938,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
         }}
         onClose={() => setMusicModalOpen(false)}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -1174,6 +1260,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  suggestionBox: {
+    marginTop: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  suggestionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  suggestionTagText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  suggestionCountText: {
+    fontSize: 11,
   },
   settingRow: {
     flexDirection: 'row',

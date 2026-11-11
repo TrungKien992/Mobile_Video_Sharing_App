@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, StyleSheet, SafeAreaView, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -28,6 +29,7 @@ const MainNavigator: React.FC = () => {
   const { activeRoute, currentTab, currentUser, setTab } = useApp();
   const { isDarkMode, theme } = useTheme();
   const ready = usePersistence();
+  const insets = useSafeAreaInsets();
 
   if (!ready) {
     return <LoadingView message="Đang đồng bộ dữ liệu từ MongoDB..." />;
@@ -106,7 +108,16 @@ const MainNavigator: React.FC = () => {
     activeRoute.name === 'main' && currentTab !== 'create';
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <View
+      style={[
+        styles.safeArea,
+        {
+          backgroundColor: isFullscreenView ? '#000000' : theme.background,
+          paddingTop: isFullscreenView ? 0 : insets.top,
+          paddingBottom: isFullscreenView || showBottomTabBar ? 0 : insets.bottom,
+        },
+      ]}
+    >
       <StatusBar style={isFullscreenView || isDarkMode ? 'light' : 'dark'} />
       <ResponsiveContainer>
         <PopupProvider>
@@ -119,24 +130,31 @@ const MainNavigator: React.FC = () => {
           </View>
         </PopupProvider>
       </ResponsiveContainer>
-    </SafeAreaView>
+    </View>
   );
 };
 
 export default function App() {
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.title = 'VClip';
+    }
+  }, []);
+
   return (
-    <ThemeProvider>
-      <AppProvider>
-        <MainNavigator />
-      </AppProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppProvider>
+          <MainNavigator />
+        </AppProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   appWrapper: {
     flex: 1,

@@ -12,6 +12,7 @@ import {
   Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { CommentModal } from '../components/CommentModal';
@@ -29,6 +30,7 @@ interface VideoWatchingScreenProps {
 export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoId }) => {
   const {
     videos,
+    comments,
     currentUser,
     likedVideoIds,
     bookmarkedVideoIds,
@@ -43,6 +45,9 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
     goBack,
     navigateTo,
   } = useApp();
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'web' ? 18 : Math.max(18, insets.top + 8);
+  const bottomInset = Platform.OS === 'web' ? 0 : insets.bottom;
 
   const [currentIndex, setCurrentIndex] = useState(() => {
     const idx = videos.findIndex((v) => v.id === videoId);
@@ -188,6 +193,9 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
         videoId={currentVideo.id}
         isPlaying={true}
         isLooping={true}
+        bottomSafeOffset={bottomInset}
+        topSafeOffset={topInset}
+        filterId={currentVideo.filter}
         filterOverlayColor={activeFilterObj?.overlayColor}
         onDoubleTap={handleDoubleTapLike}
       />
@@ -201,7 +209,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
       />
 
       {/* 2. Thanh điều hướng trên cùng */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { top: topInset }]}>
         <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -238,7 +246,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
       </View>
 
       {/* 3. Cột công cụ tương tác bên phải (Sidebar) */}
-      <View style={styles.rightActionsColumn}>
+      <View style={[styles.rightActionsColumn, { bottom: 84 + bottomInset }]}>
         {/* Avatar tác giả + Nút Follow */}
         <View style={styles.avatarWrapper}>
           <TouchableOpacity
@@ -292,7 +300,9 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           activeOpacity={0.8}
         >
           <Ionicons name="chatbubble-ellipses" size={31} color="#FFFFFF" />
-          <Text style={styles.actionLabel}>{currentVideo.commentsCount}</Text>
+          <Text style={styles.actionLabel}>
+            {comments.filter((c) => c.videoId === currentVideo.id).length}
+          </Text>
         </TouchableOpacity>
 
         {/* Nút Lưu / Bookmark */}
@@ -350,7 +360,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => {
-            if (currentVideo.music?.id) {
+            if (currentVideo.music?.id && currentVideo.music.id !== 'none') {
               openCreateWithMusic(currentVideo.music.id);
               showToast(`Đã chọn nhạc: ${currentVideo.music.title} 🎵`, 'info');
             }
@@ -377,7 +387,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
       </View>
 
       {/* 4. Thông tin video ở góc dưới */}
-      <View style={styles.bottomInfoOverlay}>
+      <View style={[styles.bottomInfoOverlay, { bottom: 24 + bottomInset }]}>
         <View style={styles.creatorHeaderRow}>
           <TouchableOpacity
             onPress={() =>
@@ -449,7 +459,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           style={styles.musicRow}
           activeOpacity={0.8}
           onPress={() => {
-            if (currentVideo.music?.id) {
+            if (currentVideo.music?.id && currentVideo.music.id !== 'none') {
               openCreateWithMusic(currentVideo.music.id);
               showToast(`Đã chọn nhạc: ${currentVideo.music.title} 🎵`, 'info');
             }
@@ -462,11 +472,15 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
             style={{ marginRight: 6 }}
           />
           <Text style={styles.musicTitle} numberOfLines={1}>
-            {currentVideo.music?.title} - {currentVideo.music?.artist}
+            {currentVideo.music?.id === 'none' || !currentVideo.music?.title
+              ? `Âm thanh gốc - ${currentVideo.creator.displayName}`
+              : `${currentVideo.music.title} - ${currentVideo.music.artist}`}
           </Text>
-          <View style={styles.useSoundChip}>
-            <Text style={styles.useSoundText}>Dùng nhạc</Text>
-          </View>
+          {currentVideo.music?.id && currentVideo.music.id !== 'none' && (
+            <View style={styles.useSoundChip}>
+              <Text style={styles.useSoundText}>Dùng nhạc</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 

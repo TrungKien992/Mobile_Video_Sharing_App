@@ -12,10 +12,10 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommentItem } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
-import { RatingStars } from './RatingStars';
 import { formatDateTime } from '../utils/format';
 
 interface CommentModalProps {
@@ -26,6 +26,7 @@ interface CommentModalProps {
 
 export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, onClose }) => {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const {
     videos,
     comments,
@@ -36,25 +37,18 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
     navigateTo,
   } = useApp();
   const [inputText, setInputText] = useState('');
-  const [rating, setRating] = useState<number>(5);
   const [submitting, setSubmitting] = useState(false);
 
   const currentVideo = videos.find((v) => v.id === videoId);
   const isCommentsAllowed = currentVideo?.commentsEnabled !== false;
   const videoComments = comments.filter((c) => c.videoId === videoId);
 
-  const avgRating =
-    videoComments.length > 0
-      ? videoComments.reduce((sum, c) => sum + (c.rating || 5), 0) / videoComments.length
-      : 5.0;
-
   const handleSendComment = async () => {
     if (!inputText.trim() || submitting) return;
     setSubmitting(true);
     try {
-      await addComment(videoId, inputText.trim(), rating);
+      await addComment(videoId, inputText.trim());
       setInputText('');
-      setRating(5);
     } finally {
       setSubmitting(false);
     }
@@ -88,7 +82,6 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
                 {item.user.displayName || item.user.username}
               </Text>
             </TouchableOpacity>
-            <RatingStars value={item.rating || 5} size={12} />
           </View>
           <Text style={[styles.commentText, { color: theme.textSecondary }]}>
             {item.text}
@@ -134,20 +127,20 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={[styles.sheetContainer, { backgroundColor: theme.surface }]}
+          style={[
+            styles.sheetContainer,
+            {
+              backgroundColor: theme.surface,
+              paddingBottom: Platform.OS === 'web' ? 0 : insets.bottom,
+            },
+          ]}
         >
-          {/* Header kèm trung bình đánh giá sao (BT8.5) */}
+          {/* Header */}
           <View style={[styles.sheetHeader, { borderBottomColor: theme.border }]}>
             <View>
               <Text style={[styles.sheetTitle, { color: theme.text }]}>
-                Bình luận & Đánh giá ({videoComments.length})
+                Bình luận ({videoComments.length})
               </Text>
-              <View style={styles.avgRow}>
-                <RatingStars value={avgRating} size={13} />
-                <Text style={[styles.avgText, { color: theme.textSecondary }]}>
-                  {avgRating.toFixed(1)} / 5.0
-                </Text>
-              </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={24} color={theme.text} />
@@ -168,13 +161,13 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
                   color={theme.textMuted}
                 />
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                  Chưa có bình luận nào. Hãy để lại đánh giá đầu tiên!
+                  Chưa có bình luận nào. Hãy để lại bình luận đầu tiên!
                 </Text>
               </View>
             }
           />
 
-          {/* Form gửi bình luận + chọn số sao (BT8.5) */}
+          {/* Form gửi bình luận */}
           {!isCommentsAllowed ? (
             <View
               style={[
@@ -199,13 +192,6 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
                 { backgroundColor: theme.surface, borderTopColor: theme.border },
               ]}
             >
-              <View style={styles.ratingPickRow}>
-                <Text style={[styles.ratingLabel, { color: theme.textSecondary }]}>
-                  Đánh giá video:
-                </Text>
-                <RatingStars value={rating} size={18} onChange={setRating} />
-              </View>
-
               <View style={styles.inputBar}>
                 <Image source={{ uri: currentUser.avatarUrl }} style={styles.myAvatar} />
                 <TextInput
@@ -252,7 +238,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
               ]}
             >
               <Text style={[styles.loginPromptText, { color: theme.textSecondary }]}>
-                Đăng nhập để gửi bình luận và đánh giá video
+                Đăng nhập để gửi bình luận cho video
               </Text>
               <TouchableOpacity
                 style={[styles.loginBtnSmall, { backgroundColor: theme.primary }]}

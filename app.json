@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Prj",
-    "slug": "Prj",
+    "name": "VClip",
+    "slug": "vclip",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,6 +19,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "name": "VClip",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [

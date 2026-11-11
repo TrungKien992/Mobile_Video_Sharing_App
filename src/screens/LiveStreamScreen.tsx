@@ -11,12 +11,13 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { FloatingHeart } from '../components/FloatingHeart';
 import { useApp } from '../context/AppContext';
 import { confirmDialog, showMessage, showToast } from '../utils/dialog';
-import { formatPrice } from '../utils/format';
+import { formatNumber, formatPrice } from '../utils/format';
 
 interface LiveMessage {
   id: string;
@@ -27,6 +28,9 @@ interface LiveMessage {
 
 export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => {
   const { videos, currentUser, goBack } = useApp();
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'web' ? 20 : Math.max(20, insets.top + 8);
+  const bottomInset = Platform.OS === 'web' ? 0 : insets.bottom;
   const liveVideo =
     videos.find((v) => v.id === videoId) ||
     videos.find((v) => v.isLive) ||
@@ -35,26 +39,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
   const chatScrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
   const [hearts, setHearts] = useState<{ id: string; color: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [liveMessages, setLiveMessages] = useState<LiveMessage[]>([
-    {
-      id: 'm1',
-      sender: 'Jane',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100',
-      text: 'Sản phẩm này có màu đen không shop?',
-    },
-    {
-      id: 'm2',
-      sender: 'Lauren',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100',
-      text: 'Tôi muốn mua 1 cái cho cún cưng sinh nhật sắp tới, đặt thế nào ạ?',
-    },
-    {
-      id: 'm3',
-      sender: 'Minh',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      text: 'Shop giao hàng về Đà Nẵng mất mấy ngày vậy?',
-    },
-  ]);
+  const [liveMessages, setLiveMessages] = useState<LiveMessage[]>([]);
 
   // Tự động cuộn xuống tin nhắn mới nhất
   useEffect(() => {
@@ -124,7 +109,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
       />
 
       {/* 2. Top bar thông tin buổi Live */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { top: topInset }]}>
         <View style={styles.shopPill}>
           <Ionicons name="storefront" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
           <Text style={styles.shopName}>{liveVideo.creator.displayName}</Text>
@@ -134,7 +119,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
           <View style={styles.viewerBadge}>
             <Ionicons name="people" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
             <Text style={styles.viewerCount}>
-              {liveVideo.liveViewerCount ? `${(liveVideo.liveViewerCount / 1000).toFixed(1)}k` : '1.2k'}
+              {formatNumber((liveVideo.liveViewerCount || 0) + 1)}
             </Text>
           </View>
 
@@ -150,7 +135,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
       ))}
 
       {/* 4. Thẻ sản phẩm ghim mua ngay (Pinned Product Card) */}
-      <View style={styles.pinnedProductCard}>
+      <View style={[styles.pinnedProductCard, { bottom: 235 + bottomInset }]}>
         <Image
           source={{
             uri:
@@ -168,7 +153,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
               {formatPrice(liveVideo.liveProduct?.price || 450000)}
             </Text>
             <Text style={styles.productSold}>
-              {liveVideo.liveProduct?.soldCount || 340} đã bán
+              {liveVideo.liveProduct?.soldCount ?? 0} đã bán
             </Text>
           </View>
         </View>
@@ -202,7 +187,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
       </View>
 
       {/* 6. Thanh nhập chat & nút thả reaction */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { bottom: 14 + bottomInset }]}>
         <View style={styles.chatInputWrap}>
           <TextInput
             style={styles.chatInput}

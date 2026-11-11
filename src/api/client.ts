@@ -222,7 +222,7 @@ export async function askAIVideo(payload: {
             success: true,
             source: 'Google & Open Free AI Chat',
             answer: reply,
-            suggestedComment: `Video "${payload.videoTitle}" đỉnh quá @${creator} ơi! Thả 5 sao luôn ⭐❤️`,
+            suggestedComment: `Video "${payload.videoTitle}" đỉnh quá @${creator} ơi! ❤️`,
           };
         }
       }
@@ -252,7 +252,7 @@ export async function askAIVideo(payload: {
       success: true,
       source: 'Google Free AI Smart Chat',
       answer: fallbackAnswer,
-      suggestedComment: `Video "${payload.videoTitle}" đỉnh quá @${creator} ơi! Thả 5 sao luôn ⭐❤️`,
+      suggestedComment: `Video "${payload.videoTitle}" đỉnh quá @${creator} ơi! ❤️`,
     };
   }
 }

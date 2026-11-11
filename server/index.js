@@ -177,7 +177,7 @@ const VideoSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, default: '' },
   videoUrl: { type: String, required: true },
-  thumbnailUrl: { type: String, required: true },
+  thumbnailUrl: { type: String, default: '' },
   duration: { type: String, default: '00:20' },
   views: { type: Number, default: 0 },
   baseLikes: { type: Number, default: 0 },
@@ -247,7 +247,17 @@ const NotificationModel = mongoose.model('Notification', NotificationSchema);
 // 2. HÀM HELPER FORMAT DỮ LIỆU TRẢ VỀ CLIENT
 // ============================================================================
 
-function formatUserResponse(userDoc, currentUserId) {
+async function buildUserLikesMap(videosList) {
+  const docs = videosList || (await VideoModel.find({}, 'creatorId likedBy'));
+  const userLikesMap = new Map();
+  docs.forEach((v) => {
+    const likesCount = Array.isArray(v.likedBy) ? v.likedBy.length : 0;
+    userLikesMap.set(v.creatorId, (userLikesMap.get(v.creatorId) || 0) + likesCount);
+  });
+  return userLikesMap;
+}
+
+function formatUserResponse(userDoc, currentUserId, userLikesMap) {
   const u = userDoc.toObject ? userDoc.toObject() : userDoc;
   const followers = Array.isArray(u.followers) ? u.followers : [];
   const following = Array.isArray(u.following) ? u.following : [];
@@ -261,16 +271,22 @@ function formatUserResponse(userDoc, currentUserId) {
     bio: u.bio || '',
     avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
     isVerified: !!u.isVerified,
-    followersCount: (u.baseFollowersCount || 0) + followers.length,
+    followersCount: followers.length,
     followingCount: following.length,
-    likesCount: u.baseLikesCount || 1250,
+    likesCount: userLikesMap ? (userLikesMap.get(u.id) || 0) : 0,
     followingIds: following,
     followerIds: followers,
     isFollowed: currentUserId ? followers.includes(currentUserId) : false,
   };
 }
 
-async function formatVideoResponse(videoDoc, usersMap, commentsCountMap, currentUserId) {
+async function formatVideoResponse(
+  videoDoc,
+  usersMap,
+  commentsCountMap,
+  currentUserId,
+  userLikesMap
+) {
   const v = videoDoc.toObject ? videoDoc.toObject() : videoDoc;
   const creatorDoc = usersMap.get(v.creatorId) || {
     id: v.creatorId,
@@ -280,8 +296,8 @@ async function formatVideoResponse(videoDoc, usersMap, commentsCountMap, current
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
     followers: [],
     following: [],
-    baseFollowersCount: 100,
-    baseLikesCount: 500,
+    baseFollowersCount: 0,
+    baseLikesCount: 0,
   };
   const likedBy = Array.isArray(v.likedBy) ? v.likedBy : [];
   const bookmarkedBy = Array.isArray(v.bookmarkedBy) ? v.bookmarkedBy : [];
@@ -292,17 +308,17 @@ async function formatVideoResponse(videoDoc, usersMap, commentsCountMap, current
     title: v.title,
     description: v.description,
     videoUrl: v.videoUrl,
-    thumbnailUrl: v.thumbnailUrl,
+    thumbnailUrl: v.thumbnailUrl || '',
     duration: v.duration || '00:20',
     views: v.views || 0,
-    likes: (v.baseLikes || 0) + likedBy.length,
+    likes: likedBy.length,
     commentsCount: totalComments,
     sharesCount: v.sharesCount || 0,
-    creator: formatUserResponse(creatorDoc, currentUserId),
+    creator: formatUserResponse(creatorDoc, currentUserId, userLikesMap),
     hashtags: v.hashtags || [],
-    category: v.category || 'trending',
+    category: v.category || '',
     music: v.music || {
-      id: 'm1',
+      id: 'none',
       title: 'Âm thanh gốc',
       artist: creatorDoc.name,
       duration: '00:20',
@@ -353,6 +369,40 @@ async function seedDatabaseIfNeeded() {
     if (migratedCount > 0) {
       console.log(`[MongoDB] Đã mã hóa bảo mật (scrypt+salt) cho ${migratedCount} tài khoản hiện có.`);
     }
+
+    // Đồng bộ bỏ các chỉ số ảo cũ trên dữ liệu mẫu nếu database đã từng seed trước đó
+    const hasFakeVideo = await VideoModel.findOne({ baseLikes: { $gt: 0 } });
+    const hasFakeUser = await UserModel.findOne({ baseFollowersCount: { $gt: 0 } });
+    const hasFakeComment = await CommentModel.findOne({ baseLikes: { $gt: 0 } });
+    if (hasFakeVideo || hasFakeUser || hasFakeComment) {
+      await UserModel.updateMany({}, { $set: { baseFollowersCount: 0, baseLikesCount: 0 } });
+      await VideoModel.updateMany(
+        { id: { $in: ['vid_1', 'vid_2', 'vid_3', 'vid_4', 'vid_5', 'vid_6', 'vid_live_1'] } },
+        { $set: { views: 0, baseLikes: 0, sharesCount: 0, liveViewerCount: 0 } }
+      );
+      await VideoModel.updateOne(
+        { id: 'vid_live_1' },
+        { $set: { 'liveProduct.soldCount': 0 } }
+      );
+      await CommentModel.updateMany({}, { $set: { baseLikes: 0 } });
+
+      // Đảm bảo dữ liệu follow mẫu đối xứng 2 chiều giữa các user seed
+      const symmetricFollowers = {
+        user_demo: ['user_bookstore_demo', 'user_khanhvy', 'user_hoangnam', 'user_baongoc'],
+        user_bookstore_demo: [],
+        user_khanhvy: ['user_demo', 'user_bookstore_demo', 'user_bepnhame'],
+        user_thucung: ['user_demo'],
+        user_bepnhame: ['user_demo'],
+        user_hoangnam: [],
+        user_baongoc: [],
+        user_vclipshop: [],
+      };
+      for (const [uid, fIds] of Object.entries(symmetricFollowers)) {
+        await UserModel.updateOne({ id: uid }, { $set: { followers: fIds } });
+      }
+      console.log('[MongoDB] Đã chuẩn hóa số liệu thực tế (xóa số liệu ảo cũ).');
+    }
+
     console.log(`[MongoDB] Đã có dữ liệu (${userCount} users). Giữ nguyên dữ liệu hiện tại.`);
     return;
   }
@@ -370,10 +420,10 @@ async function seedDatabaseIfNeeded() {
       bio: 'Sáng tạo nội dung Du lịch, Công nghệ & Ẩm thực Việt Nam 🇻🇳✨',
       avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
       isVerified: true,
-      followers: ['user_khanhvy', 'user_baongoc'],
+      followers: ['user_bookstore_demo', 'user_khanhvy', 'user_hoangnam', 'user_baongoc'],
       following: ['user_khanhvy', 'user_bepnhame', 'user_thucung'],
-      baseFollowersCount: 1420,
-      baseLikesCount: 18500,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-01T08:00:00.000Z',
     },
     {
@@ -386,10 +436,10 @@ async function seedDatabaseIfNeeded() {
       bio: 'Yêu đọc sách, quay vlog đời sống & chia sẻ năng lượng tích cực 🌸📚',
       avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop&q=80',
       isVerified: true,
-      followers: ['user_demo'],
+      followers: [],
       following: ['user_demo', 'user_khanhvy'],
-      baseFollowersCount: 980,
-      baseLikesCount: 9400,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-02T08:00:00.000Z',
     },
     {
@@ -402,10 +452,10 @@ async function seedDatabaseIfNeeded() {
       bio: 'Khám phá 63 tỉnh thành Việt Nam & văn hóa thế giới ✈️🌏',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
       isVerified: true,
-      followers: ['user_demo', 'user_bookstore_demo'],
+      followers: ['user_demo', 'user_bookstore_demo', 'user_bepnhame'],
       following: ['user_demo'],
-      baseFollowersCount: 45200,
-      baseLikesCount: 680000,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-03T08:00:00.000Z',
     },
     {
@@ -420,8 +470,8 @@ async function seedDatabaseIfNeeded() {
       isVerified: true,
       followers: ['user_demo'],
       following: [],
-      baseFollowersCount: 82300,
-      baseLikesCount: 1450000,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-04T08:00:00.000Z',
     },
     {
@@ -436,8 +486,8 @@ async function seedDatabaseIfNeeded() {
       isVerified: true,
       followers: ['user_demo'],
       following: ['user_khanhvy'],
-      baseFollowersCount: 63900,
-      baseLikesCount: 920000,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-05T08:00:00.000Z',
     },
     {
@@ -452,8 +502,8 @@ async function seedDatabaseIfNeeded() {
       isVerified: false,
       followers: [],
       following: ['user_demo'],
-      baseFollowersCount: 28400,
-      baseLikesCount: 410000,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-06T08:00:00.000Z',
     },
     {
@@ -468,8 +518,8 @@ async function seedDatabaseIfNeeded() {
       isVerified: true,
       followers: [],
       following: ['user_demo'],
-      baseFollowersCount: 94100,
-      baseLikesCount: 2150000,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-07T08:00:00.000Z',
     },
     {
@@ -482,10 +532,10 @@ async function seedDatabaseIfNeeded() {
       bio: 'Kênh Livestream săn deal công nghệ & phụ kiện chính hãng mỗi tối 🔥🛒',
       avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80',
       isVerified: true,
-      followers: ['user_demo'],
+      followers: [],
       following: [],
-      baseFollowersCount: 112000,
-      baseLikesCount: 1890000,
+      baseFollowersCount: 0,
+      baseLikesCount: 0,
       createdAt: '2026-10-08T08:00:00.000Z',
     },
   ];
@@ -499,11 +549,11 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/sea_turtle.mp4',
       thumbnailUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_600/sea_turtle.jpg',
       duration: '00:14',
-      views: 158400,
-      baseLikes: 14200,
+      views: 0,
+      baseLikes: 0,
       likedBy: ['user_demo'],
       bookmarkedBy: ['user_demo'],
-      sharesCount: 412,
+      sharesCount: 0,
       creatorId: 'user_khanhvy',
       hashtags: ['dulichbien', 'daiduong', 'thiennhien', 'khampha'],
       category: 'travel',
@@ -524,11 +574,11 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/dog.mp4',
       thumbnailUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_600/dog.jpg',
       duration: '00:13',
-      views: 342000,
-      baseLikes: 28900,
+      views: 0,
+      baseLikes: 0,
       likedBy: [],
       bookmarkedBy: [],
-      sharesCount: 820,
+      sharesCount: 0,
       creatorId: 'user_thucung',
       hashtags: ['thucung', 'cuncon', 'doglover', 'vuinhon'],
       category: 'pets',
@@ -549,11 +599,11 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
       thumbnailUrl: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=600&auto=format&fit=crop&q=80',
       duration: '00:06',
-      views: 195000,
-      baseLikes: 19300,
+      views: 0,
+      baseLikes: 0,
       likedBy: ['user_demo'],
       bookmarkedBy: [],
-      sharesCount: 530,
+      sharesCount: 0,
       creatorId: 'user_bepnhame',
       hashtags: ['hoano', 'timelapse', 'thugiancuoituan', 'thiennhien'],
       category: 'lifestyle',
@@ -574,11 +624,11 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/skate.mp4',
       thumbnailUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_600/skate.jpg',
       duration: '00:16',
-      views: 210000,
-      baseLikes: 16400,
+      views: 0,
+      baseLikes: 0,
       likedBy: [],
       bookmarkedBy: ['user_demo'],
-      sharesCount: 390,
+      sharesCount: 0,
       creatorId: 'user_hoangnam',
       hashtags: ['thethao', 'skateboard', 'duongpho', 'nangluong'],
       category: 'sports',
@@ -599,11 +649,11 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/snow_horses.mp4',
       thumbnailUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_600/snow_horses.jpg',
       duration: '00:18',
-      views: 88000,
-      baseLikes: 7600,
-      likedBy: ['user_demo'],
+      views: 0,
+      baseLikes: 0,
+      likedBy: [],
       bookmarkedBy: [],
-      sharesCount: 215,
+      sharesCount: 0,
       creatorId: 'user_demo',
       hashtags: ['muadong', 'thaonguyen', 'dulich', 'vlog'],
       category: 'travel',
@@ -624,11 +674,11 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
       thumbnailUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop&q=80',
       duration: '00:10',
-      views: 520000,
-      baseLikes: 45100,
+      views: 0,
+      baseLikes: 0,
       likedBy: [],
       bookmarkedBy: [],
-      sharesCount: 1290,
+      sharesCount: 0,
       creatorId: 'user_baongoc',
       hashtags: ['animation3d', 'giaitri', 'bunny', 'phimngan'],
       category: 'art',
@@ -649,22 +699,22 @@ async function seedDatabaseIfNeeded() {
       videoUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_720/elephants.mp4',
       thumbnailUrl: 'https://res.cloudinary.com/demo/video/upload/q_auto,w_600/elephants.jpg',
       duration: 'LIVE',
-      views: 94000,
-      baseLikes: 15800,
+      views: 0,
+      baseLikes: 0,
       likedBy: [],
       bookmarkedBy: [],
-      sharesCount: 640,
+      sharesCount: 0,
       creatorId: 'user_vclipshop',
       hashtags: ['livestream', 'vclipmall', 'safari', 'sandeal'],
       category: 'streaming',
       isLive: true,
-      liveViewerCount: 1480,
+      liveViewerCount: 0,
       liveProduct: {
         id: 'prod_mic_vclip',
         name: 'Bộ Mic Thu Âm Vlog Không Dây Pro',
         price: 450000,
         currency: 'đ',
-        soldCount: 340,
+        soldCount: 0,
         imageUrl: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=200&auto=format&fit=crop&q=80',
       },
       createdAt: '2026-11-10T11:00:00.000Z',
@@ -680,7 +730,7 @@ async function seedDatabaseIfNeeded() {
       userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80',
       rating: 5,
       text: 'Góc quay flycam mượt và màu phim đẹp xuất sắc luôn bạn ơi! 🌄👏',
-      baseLikes: 42,
+      baseLikes: 0,
       likedBy: ['user_demo'],
       createdAt: '2026-11-10T09:10:00.000Z',
     },
@@ -692,7 +742,7 @@ async function seedDatabaseIfNeeded() {
       userAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80',
       rating: 5,
       text: 'Xem xong chỉ muốn xách balo lên đi du lịch ngay lập tức ❤️',
-      baseLikes: 19,
+      baseLikes: 0,
       likedBy: [],
       createdAt: '2026-11-10T10:05:00.000Z',
     },
@@ -704,7 +754,7 @@ async function seedDatabaseIfNeeded() {
       userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
       rating: 5,
       text: 'Hai cái chân ngắn cũn cỡn chạy nhìn cưng xỉu luôn á 😂🐶',
-      baseLikes: 85,
+      baseLikes: 0,
       likedBy: ['user_demo'],
       createdAt: '2026-11-10T10:40:00.000Z',
     },
@@ -716,7 +766,7 @@ async function seedDatabaseIfNeeded() {
       userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
       rating: 5,
       text: 'Đã làm thử theo công thức của kênh và thành công ngay lần đầu! Cảm ơn Bếp Nhà Mẹ.',
-      baseLikes: 31,
+      baseLikes: 0,
       likedBy: [],
       createdAt: '2026-11-10T11:15:00.000Z',
     },
@@ -840,8 +890,8 @@ app.post('/api/auth/register', async (req, res) => {
       avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80`,
       isVerified: false,
       followers: [],
-      following: ['user_khanhvy', 'user_thucung'],
-      baseFollowersCount: 1,
+      following: [],
+      baseFollowersCount: 0,
       baseLikesCount: 0,
       createdAt: new Date().toISOString(),
     });
@@ -874,8 +924,11 @@ app.post('/api/auth/register', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const currentUserId = req.query.currentUserId || '';
-    const users = await UserModel.find({});
-    return res.json(users.map((u) => formatUserResponse(u, currentUserId)));
+    const [users, userLikesMap] = await Promise.all([
+      UserModel.find({}),
+      buildUserLikesMap(),
+    ]);
+    return res.json(users.map((u) => formatUserResponse(u, currentUserId, userLikesMap)));
   } catch (err) {
     return res.status(500).json({ message: 'Không thể tải danh sách người dùng' });
   }
@@ -884,11 +937,14 @@ app.get('/api/users', async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const currentUserId = req.query.currentUserId || '';
-    const user = await UserModel.findOne({ id: req.params.id });
+    const [user, userLikesMap] = await Promise.all([
+      UserModel.findOne({ id: req.params.id }),
+      buildUserLikesMap(),
+    ]);
     if (!user) {
       return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     }
-    return res.json(formatUserResponse(user, currentUserId));
+    return res.json(formatUserResponse(user, currentUserId, userLikesMap));
   } catch (err) {
     return res.status(500).json({ message: 'Lỗi tải thông tin người dùng' });
   }
@@ -977,11 +1033,12 @@ app.post('/api/users/:id/follow', async (req, res) => {
     }
 
     await Promise.all([targetUser.save(), currentUser.save()]);
+    const userLikesMap = await buildUserLikesMap();
 
     return res.json({
       isFollowed,
-      targetUser: formatUserResponse(targetUser, currentUserId),
-      currentUser: formatUserResponse(currentUser, currentUserId),
+      targetUser: formatUserResponse(targetUser, currentUserId, userLikesMap),
+      currentUser: formatUserResponse(currentUser, currentUserId, userLikesMap),
       followedUserIds: currentUser.following,
     });
   } catch (err) {
@@ -1041,8 +1098,12 @@ app.get('/api/videos', async (req, res) => {
       commentsCountMap.set(c.videoId, (commentsCountMap.get(c.videoId) || 0) + 1);
     });
 
+    const userLikesMap = await buildUserLikesMap();
+
     const formatted = await Promise.all(
-      videos.map((v) => formatVideoResponse(v, usersMap, commentsCountMap, currentUserId))
+      videos.map((v) =>
+        formatVideoResponse(v, usersMap, commentsCountMap, currentUserId, userLikesMap)
+      )
     );
 
     return res.json(formatted);
@@ -1097,6 +1158,24 @@ app.post('/api/videos', async (req, res) => {
 
     const activeCreatorId = creatorId || 'user_demo';
     const creator = await UserModel.findOne({ id: activeCreatorId });
+    const resolvedMusic =
+      music && music.id === 'none'
+        ? {
+            id: 'none',
+            title: 'Âm thanh gốc',
+            artist: creator ? creator.name : 'Nhà sáng tạo',
+            duration: duration || '00:15',
+            audioUrl: '',
+            coverUrl: creator ? creator.avatarUrl : '',
+          }
+        : music || {
+            id: 'none',
+            title: 'Âm thanh gốc',
+            artist: creator ? creator.name : 'Nhà sáng tạo',
+            duration: duration || '00:15',
+            audioUrl: '',
+            coverUrl: creator ? creator.avatarUrl : '',
+          };
 
     const newVideoDoc = await VideoModel.create({
       id: 'vid_' + Date.now(),
@@ -1104,26 +1183,17 @@ app.post('/api/videos', async (req, res) => {
       description: description ? String(description).trim() : '',
       videoUrl: String(videoUrl).trim(),
       thumbnailUrl:
-        thumbnailUrl && String(thumbnailUrl).trim()
-          ? String(thumbnailUrl).trim()
-          : 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=600&auto=format&fit=crop&q=80',
-      duration: duration || '00:25',
-      views: 1,
+        thumbnailUrl && String(thumbnailUrl).trim() ? String(thumbnailUrl).trim() : '',
+      duration: duration || '00:15',
+      views: 0,
       baseLikes: 0,
       likedBy: [],
       bookmarkedBy: [],
       sharesCount: 0,
       creatorId: activeCreatorId,
-      hashtags: Array.isArray(hashtags) && hashtags.length > 0 ? hashtags : ['vclip', 'xuhuong'],
-      category: category || 'trending',
-      music: music || {
-        id: 'm_orig',
-        title: 'Âm thanh gốc',
-        artist: creator ? creator.name : 'Nhà sáng tạo',
-        duration: '00:25',
-        audioUrl: '',
-        coverUrl: creator ? creator.avatarUrl : '',
-      },
+      hashtags: Array.isArray(hashtags) ? hashtags : [],
+      category: category ? String(category).trim() : '',
+      music: resolvedMusic,
       filter: filter || 'none',
       privacy: privacy || 'all',
       commentsEnabled: commentsEnabled !== false,
@@ -1136,7 +1206,7 @@ app.post('/api/videos', async (req, res) => {
       id: 'notif_' + Date.now(),
       userId: activeCreatorId,
       title: 'Đăng video thành công! 🎬',
-      body: `Video "${newVideoDoc.title}" của bạn đã được xuất bản lên VClip.`,
+      body: `Video "${newVideoDoc.title}" của bạn đã được đăng lên VClip.`,
       read: false,
       createdAt: new Date().toISOString(),
       target: { screen: 'watch', videoId: newVideoDoc.id, creatorId: '' },
@@ -1144,7 +1214,14 @@ app.post('/api/videos', async (req, res) => {
 
     const usersMap = new Map();
     if (creator) usersMap.set(creator.id, creator);
-    const formatted = await formatVideoResponse(newVideoDoc, usersMap, new Map(), activeCreatorId);
+    const userLikesMap = await buildUserLikesMap();
+    const formatted = await formatVideoResponse(
+      newVideoDoc,
+      usersMap,
+      new Map(),
+      activeCreatorId,
+      userLikesMap
+    );
 
     return res.status(201).json(formatted);
   } catch (err) {
@@ -1198,7 +1275,7 @@ app.post('/api/videos/:id/like', async (req, res) => {
     return res.json({
       videoId: video.id,
       isLiked,
-      likes: (video.baseLikes || 0) + video.likedBy.length,
+      likes: video.likedBy.length,
       likedVideoIds,
     });
   } catch (err) {
@@ -1261,7 +1338,7 @@ app.get('/api/comments', async (req, res) => {
       rating: c.rating || 5,
       text: c.text,
       createdAt: c.createdAt,
-      likesCount: (c.baseLikes || 0) + (c.likedBy ? c.likedBy.length : 0),
+      likesCount: c.likedBy ? c.likedBy.length : 0,
       isLiked: currentUserId ? (c.likedBy || []).includes(String(currentUserId)) : false,
       user: {
         id: c.userId,
@@ -1356,7 +1433,7 @@ app.post('/api/comments/:id/like', async (req, res) => {
     return res.json({
       id: comment.id,
       isLiked,
-      likesCount: (comment.baseLikes || 0) + comment.likedBy.length,
+      likesCount: comment.likedBy ? comment.likedBy.length : 0,
     });
   } catch (err) {
     return res.status(500).json({ message: 'Lỗi thích bình luận' });

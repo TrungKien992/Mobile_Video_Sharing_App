@@ -65,7 +65,7 @@ export const StorageService = {
       const remoteVideos = await api.get<VideoItem[]>('/api/videos', {
         params: { currentUserId },
       });
-      if (Array.isArray(remoteVideos) && remoteVideos.length > 0) {
+      if (Array.isArray(remoteVideos)) {
         await AsyncStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(remoteVideos));
         return remoteVideos;
       }
@@ -152,11 +152,11 @@ export const StorageService = {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.LIKED_VIDEOS);
       if (stored) return JSON.parse(stored);
-      const defaults = ['vid_1', 'vid_3', 'vid_5'];
+      const defaults = ['vid_1', 'vid_3'];
       await AsyncStorage.setItem(STORAGE_KEYS.LIKED_VIDEOS, JSON.stringify(defaults));
       return defaults;
     } catch {
-      return ['vid_1', 'vid_3', 'vid_5'];
+      return ['vid_1', 'vid_3'];
     }
   },
 
@@ -314,7 +314,7 @@ export const StorageService = {
       const remoteComments = await api.get<CommentItem[]>('/api/comments', {
         params: { videoId },
       });
-      if (Array.isArray(remoteComments) && remoteComments.length > 0) {
+      if (Array.isArray(remoteComments)) {
         if (!videoId) {
           await AsyncStorage.setItem(
             STORAGE_KEYS.COMMENTS,
