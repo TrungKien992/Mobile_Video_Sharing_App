@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -10,16 +11,18 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { FormField } from '../components/FormField';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { uploadFile } from '../api/client';
 import {
   getErrorMessage,
   validatePhone,
   validateRequired,
 } from '../utils/validators';
-import { showMessage } from '../utils/dialog';
+import { showMessage, showToast } from '../utils/dialog';
 
 const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
@@ -40,12 +43,66 @@ export const EditProfileScreen: React.FC = () => {
   const [phone, setPhone] = useState(currentUser.phone || '0901234567');
   const [bio, setBio] = useState(currentUser.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const [errors, setErrors] = useState<{
     displayName?: string | null;
     phone?: string | null;
   }>({});
   const [loading, setLoading] = useState(false);
+
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleWebAvatarFile = async (event: any) => {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    try {
+      const res = await uploadFile(file);
+      setAvatarUrl(res.url);
+      showToast('Đã tải ảnh đại diện mới lên Server 📸', 'success');
+    } catch {
+      const localUrl = URL.createObjectURL(file);
+      setAvatarUrl(localUrl);
+      showToast('Đã chọn ảnh đại diện mới 📸', 'info');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handlePickCustomAvatar = async () => {
+    if (Platform.OS === 'web') {
+      avatarInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets?.length) {
+        const asset = result.assets[0];
+        setUploadingAvatar(true);
+        try {
+          const uploaded = await uploadFile({
+            uri: asset.uri,
+            name: `avatar_${Date.now()}.jpg`,
+            type: 'image/jpeg',
+          });
+          setAvatarUrl(uploaded.url);
+        } catch {
+          setAvatarUrl(asset.uri);
+        } finally {
+          setUploadingAvatar(false);
+        }
+        showToast('Đã cập nhật ảnh đại diện mới 📸', 'success');
+      }
+    } catch {}
+  };
 
   const validate = () => {
     const nameErr = validateRequired(displayName, 'Họ và tên');
@@ -83,8 +140,24 @@ export const EditProfileScreen: React.FC = () => {
       style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {Platform.OS === 'web' && (
+        // @ts-ignore
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleWebAvatarFile}
+        />
+      )}
+
       {/* Header */}
-      <View style={[styles.topBar, { borderBottomColor: theme.border, backgroundColor: theme.surface }]}>
+      <View
+        style={[
+          styles.topBar,
+          { borderBottomColor: theme.border, backgroundColor: theme.surface },
+        ]}
+      >
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
@@ -106,12 +179,38 @@ export const EditProfileScreen: React.FC = () => {
         >
           {/* Avatar Section */}
           <View style={styles.avatarCenter}>
-            <Image
-              source={{ uri: avatarUrl }}
-              style={[styles.mainAvatar, { borderColor: theme.primary }]}
-            />
+            <TouchableOpacity
+              style={styles.avatarWrap}
+              onPress={handlePickCustomAvatar}
+              activeOpacity={0.85}
+            >
+              <Image
+                source={{ uri: avatarUrl }}
+                style={[styles.mainAvatar, { borderColor: theme.primary }]}
+              />
+              <View style={[styles.cameraBadge, { backgroundColor: theme.primary }]}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="camera" size={14} color="#FFFFFF" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.uploadAvatarBtn, { backgroundColor: theme.primaryLight }]}
+              onPress={handlePickCustomAvatar}
+              disabled={uploadingAvatar}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cloud-upload-outline" size={14} color={theme.primary} />
+              <Text style={[styles.uploadAvatarText, { color: theme.primary }]}>
+                Tải ảnh đại diện từ thiết bị
+              </Text>
+            </TouchableOpacity>
+
             <Text style={[styles.avatarHint, { color: theme.textSecondary }]}>
-              Chọn nhanh ảnh đại diện mẫu bên dưới:
+              Hoặc chọn nhanh ảnh đại diện mẫu:
             </Text>
             <View style={styles.presetRow}>
               {AVATAR_PRESETS.map((uri) => {
@@ -245,12 +344,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: 10,
+  },
   mainAvatar: {
     width: 88,
     height: 88,
     borderRadius: 44,
     borderWidth: 3,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadAvatarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     marginBottom: 10,
+  },
+  uploadAvatarText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   avatarHint: {
     fontSize: 12,

@@ -4,10 +4,89 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/video_sharing_db';
+const AUTH_SECRET = process.env.AUTH_SECRET || 'vclip_hmac_secret_key_2026';
+
+// ============================================================================
+// 0. BẢO MẬT: MÃ HÓA MẬT KHẨU (SCRYPT + SALT) & KÝ TOKEN (HMAC-SHA256)
+// ============================================================================
+
+function hashPassword(plainPassword) {
+  const plain = String(plainPassword);
+  if (plain.startsWith('scrypt$')) return plain;
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derivedKey = crypto.scryptSync(plain, salt, 64).toString('hex');
+  return `scrypt$${salt}$${derivedKey}`;
+}
+
+function verifyPassword(plainPassword, storedPassword) {
+  if (!storedPassword) return false;
+  const plain = String(plainPassword);
+  const stored = String(storedPassword);
+  if (stored.startsWith('scrypt$')) {
+    const parts = stored.split('$');
+    if (parts.length !== 3) return false;
+    const [, salt, hashHex] = parts;
+    const derivedKey = crypto.scryptSync(plain, salt, 64);
+    const storedBuf = Buffer.from(hashHex, 'hex');
+    if (derivedKey.length !== storedBuf.length) return false;
+    return crypto.timingSafeEqual(derivedKey, storedBuf);
+  }
+  return plain === stored;
+}
+
+function createAuthToken(userId) {
+  const payload = Buffer.from(
+    JSON.stringify({ sub: userId, iat: Date.now() })
+  ).toString('base64url');
+  const sig = crypto
+    .createHmac('sha256', AUTH_SECRET)
+    .update(payload)
+    .digest('base64url');
+  return `vclip_jwt.${payload}.${sig}`;
+}
+
+function verifyAuthToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  if (token.startsWith('vclip_jwt.')) {
+    const [, payload, sig] = token.split('.');
+    if (!payload || !sig) return null;
+    const expectedSig = crypto
+      .createHmac('sha256', AUTH_SECRET)
+      .update(payload)
+      .digest('base64url');
+    if (sig !== expectedSig) return null;
+    try {
+      const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+      return decoded.sub || null;
+    } catch {
+      return null;
+    }
+  }
+  // Tương thích ngược với token phiên cũ (vclip_jwt_<userId>_<ts> hoặc tk_<userId>)
+  if (token.startsWith('vclip_jwt_')) {
+    const raw = token.replace(/^vclip_jwt_/, '');
+    const lastUnderscore = raw.lastIndexOf('_');
+    return lastUnderscore > 0 ? raw.slice(0, lastUnderscore) : raw;
+  }
+  if (token.startsWith('tk_')) {
+    return token.replace(/^tk_/, '');
+  }
+  return null;
+}
+
+function extractAuthUserId(req) {
+  const authHeader = req.headers?.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    return verifyAuthToken(token);
+  }
+  return null;
+}
 
 // Đảm bảo thư mục lưu file upload tồn tại
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -157,6 +236,7 @@ function formatUserResponse(userDoc, currentUserId) {
     followingCount: following.length,
     likesCount: u.baseLikesCount || 1250,
     followingIds: following,
+    followerIds: followers,
     isFollowed: currentUserId ? followers.includes(currentUserId) : false,
   };
 }
@@ -231,6 +311,19 @@ async function seedDatabaseIfNeeded() {
 
   const userCount = await UserModel.countDocuments();
   if (userCount > 0) {
+    // Tự động nâng cấp mật khẩu plain-text cũ trong MongoDB sang dạng mã hóa scrypt + salt
+    const existingUsers = await UserModel.find({});
+    let migratedCount = 0;
+    for (const u of existingUsers) {
+      if (u.password && !String(u.password).startsWith('scrypt$')) {
+        u.password = hashPassword(u.password);
+        await u.save();
+        migratedCount++;
+      }
+    }
+    if (migratedCount > 0) {
+      console.log(`[MongoDB] Đã mã hóa bảo mật (scrypt+salt) cho ${migratedCount} tài khoản hiện có.`);
+    }
     console.log(`[MongoDB] Đã có dữ liệu (${userCount} users). Giữ nguyên dữ liệu hiện tại.`);
     return;
   }
@@ -630,12 +723,17 @@ async function seedDatabaseIfNeeded() {
     },
   ];
 
-  await UserModel.insertMany(initialUsers);
+  const hashedUsers = initialUsers.map((u) => ({
+    ...u,
+    password: hashPassword(u.password),
+  }));
+
+  await UserModel.insertMany(hashedUsers);
   await VideoModel.insertMany(initialVideos);
   await CommentModel.insertMany(initialComments);
   await NotificationModel.insertMany(initialNotifications);
 
-  console.log('[MongoDB] Khởi tạo dữ liệu mẫu thành công!');
+  console.log('[MongoDB] Khởi tạo dữ liệu mẫu thành công (mật khẩu đã mã hóa scrypt+salt)!');
 }
 
 // ============================================================================
@@ -652,7 +750,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// 4.1. AUTHENTICATION (Đăng nhập / Đăng ký - Tham khảo Buổi 8 BT8.1 & BT8.2)
+// 4.1. AUTHENTICATION (Đăng nhập / Đăng ký có mã hóa mật khẩu scrypt + HMAC JWT)
 // ----------------------------------------------------------------------------
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -663,11 +761,17 @@ app.post('/api/auth/login', async (req, res) => {
     const cleanEmail = String(email).trim().toLowerCase();
     const user = await UserModel.findOne({ email: cleanEmail });
 
-    if (!user || user.password !== String(password)) {
+    if (!user || !verifyPassword(password, user.password)) {
       return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
     }
 
-    const token = 'vclip_jwt_' + user.id + '_' + Date.now();
+    // Nếu mật khẩu cũ chưa mã hóa thì tự động nâng cấp lên scrypt
+    if (!String(user.password).startsWith('scrypt$')) {
+      user.password = hashPassword(password);
+      await user.save();
+    }
+
+    const token = createAuthToken(user.id);
     return res.json({
       user: formatUserResponse(user, user.id),
       token,
@@ -684,6 +788,9 @@ app.post('/api/auth/register', async (req, res) => {
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email và mật khẩu' });
     }
+    if (String(password).length < 6) {
+      return res.status(400).json({ message: 'Mật khẩu phải có tối thiểu 6 ký tự' });
+    }
     const cleanEmail = String(email).trim().toLowerCase();
     const existing = await UserModel.findOne({ email: cleanEmail });
     if (existing) {
@@ -698,7 +805,7 @@ app.post('/api/auth/register', async (req, res) => {
       name: String(name).trim(),
       username,
       email: cleanEmail,
-      password: String(password),
+      password: hashPassword(password),
       phone: phone ? String(phone).trim() : '',
       bio: 'Thành viên mới của cộng đồng sáng tạo VClip ✨',
       avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80`,
@@ -721,7 +828,7 @@ app.post('/api/auth/register', async (req, res) => {
       target: { screen: 'watch', videoId: 'vid_1', creatorId: '' },
     });
 
-    const token = 'vclip_jwt_' + newUser.id + '_' + Date.now();
+    const token = createAuthToken(newUser.id);
     return res.status(201).json({
       user: formatUserResponse(newUser, newUser.id),
       token,
@@ -878,13 +985,21 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// 4.4. VIDEOS (Lấy danh sách, Đăng video mới, Like, Bookmark)
+// 4.4. VIDEOS (Lấy danh sách, Đăng video mới, Like, Bookmark, Tăng View)
 // ----------------------------------------------------------------------------
 app.get('/api/videos', async (req, res) => {
   try {
-    const currentUserId = req.query.currentUserId || '';
+    const currentUserId = req.query.currentUserId || extractAuthUserId(req) || '';
+    const page = Number(req.query.page) || 0;
+    const limit = Number(req.query.limit) || 0;
+
+    let videoQuery = VideoModel.find({}).sort({ createdAt: -1 });
+    if (page > 0 && limit > 0) {
+      videoQuery = videoQuery.skip((page - 1) * limit).limit(limit);
+    }
+
     const [videos, users, comments] = await Promise.all([
-      VideoModel.find({}).sort({ createdAt: -1 }),
+      videoQuery,
       UserModel.find({}),
       CommentModel.find({}),
     ]);
@@ -905,6 +1020,24 @@ app.get('/api/videos', async (req, res) => {
   } catch (err) {
     console.error('Get videos error:', err);
     return res.status(500).json({ message: 'Không thể tải danh sách video' });
+  }
+});
+
+// POST /api/videos/:id/view - Tăng lượt xem video thực tế khi người dùng mở xem
+app.post('/api/videos/:id/view', async (req, res) => {
+  try {
+    const videoId = req.params.id;
+    const video = await VideoModel.findOneAndUpdate(
+      { id: videoId },
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+    if (!video) {
+      return res.status(404).json({ message: 'Không tìm thấy video' });
+    }
+    return res.json({ videoId: video.id, views: video.views });
+  } catch (err) {
+    return res.status(500).json({ message: 'Không thể cập nhật lượt xem' });
   }
 });
 

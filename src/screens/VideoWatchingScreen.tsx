@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,14 @@ import {
   Image,
   Platform,
   Share,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { CommentModal } from '../components/CommentModal';
 import { useApp } from '../context/AppContext';
+import { INITIAL_FILTERS } from '../data/initialFilters';
 import { VideoCacheService } from '../services/videoCacheService';
 import { confirmDialog, showMessage, showToast } from '../utils/dialog';
 import { formatNumber } from '../utils/format';
@@ -31,6 +33,9 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
     toggleLikeVideo,
     toggleBookmarkVideo,
     toggleFollowUser,
+    incrementVideoView,
+    openSearchWithQuery,
+    openCreateWithMusic,
     deleteVideo,
     goBack,
     navigateTo,
@@ -42,8 +47,18 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   });
 
   const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const viewedIdsRef = useRef<Set<string>>(new Set());
 
   const currentVideo = videos[currentIndex] || videos[0];
+
+  // Tự động tăng lượt xem thực tế trên MongoDB khi mở xem video
+  useEffect(() => {
+    if (currentVideo?.id && !viewedIdsRef.current.has(currentVideo.id)) {
+      viewedIdsRef.current.add(currentVideo.id);
+      incrementVideoView(currentVideo.id);
+    }
+  }, [currentVideo?.id, incrementVideoView]);
+
   if (!currentVideo) {
     return null;
   }
@@ -52,6 +67,8 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   const isBookmarked = bookmarkedVideoIds.has(currentVideo.id);
   const isFollowed = followedUserIds.has(currentVideo.creator.id);
   const isOwnVideo = currentVideo.creator.id === currentUser.id;
+
+  const activeFilterObj = INITIAL_FILTERS.find((f) => f.id === currentVideo.filter);
 
   // Prefetch video tiếp theo cho mượt mà
   VideoCacheService.prefetchNextVideos(currentIndex, videos);
@@ -67,6 +84,33 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   const handlePrevVideo = () => {
     if (currentIndex > 0) {
       setCurrentIndex((prev) => prev - 1);
+    }
+  };
+
+  // Cử chỉ vuốt dọc (Vertical Swipe) chuẩn TikTok / Reels để chuyển video
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_evt, gestureState) => {
+        return (
+          Math.abs(gestureState.dy) > 28 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.5
+        );
+      },
+      onPanResponderRelease: (_evt, gestureState) => {
+        if (gestureState.dy < -45) {
+          setCurrentIndex((prev) => (prev < videos.length - 1 ? prev + 1 : 0));
+        } else if (gestureState.dy > 45) {
+          setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
+        }
+      },
+    })
+  ).current;
+
+  const handleDoubleTapLike = () => {
+    if (!isLiked) {
+      toggleLikeVideo(currentVideo.id);
+    } else {
+      showToast('Bạn đã thả tim video này ❤️', 'heart');
     }
   };
 
@@ -101,20 +145,22 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
     } else {
       showMessage(
         'Thông tin Video',
-        `• Tiêu đề: ${currentVideo.title}\n• Tác giả: ${currentVideo.creator.displayName}\n• Chất lượng: MP4 HD Stream\n• Lượt xem: ${formatNumber(currentVideo.views)}`
+        `• Tiêu đề: ${currentVideo.title}\n• Tác giả: ${currentVideo.creator.displayName}\n• Bộ lọc: ${activeFilterObj?.nameVi || 'Gốc'}\n• Chất lượng: MP4 HD Stream\n• Lượt xem: ${formatNumber(currentVideo.views)}`
       );
     }
   };
 
   return (
-    <View style={styles.container}>
-      {/* 1. Video Player toàn màn hình */}
+    <View style={styles.container} {...panResponder.panHandlers}>
+      {/* 1. Video Player toàn màn hình kèm Tua tiến trình, Bộ lọc màu & Double-Tap Like */}
       <VideoPlayer
         videoUrl={currentVideo.videoUrl}
         thumbnailUrl={currentVideo.thumbnailUrl}
         videoId={currentVideo.id}
         isPlaying={true}
         isLooping={true}
+        filterOverlayColor={activeFilterObj?.overlayColor}
+        onDoubleTap={handleDoubleTapLike}
       />
 
       {/* Lớp phủ Gradient mờ ở chân để chữ đọc rõ ràng */}
@@ -132,8 +178,9 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
         </TouchableOpacity>
 
         <View style={styles.videoCounterPill}>
+          <Ionicons name="swap-vertical" size={12} color="#38BDF8" style={{ marginRight: 4 }} />
           <Text style={styles.videoCounterText}>
-            Video {currentIndex + 1} / {videos.length}
+            Vuốt dọc • {currentIndex + 1} / {videos.length}
           </Text>
         </View>
 
@@ -297,17 +344,31 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           {currentVideo.description}
         </Text>
 
-        {/* Danh sách Hashtags */}
+        {/* Danh sách Hashtags có thể bấm vào để tìm kiếm theo hashtag */}
         <View style={styles.hashtagsRow}>
           {currentVideo.hashtags.map((tag, idx) => (
-            <Text key={idx} style={styles.hashtagItem}>
-              #{tag}{' '}
-            </Text>
+            <TouchableOpacity
+              key={idx}
+              activeOpacity={0.75}
+              onPress={() => openSearchWithQuery(tag)}
+              style={styles.hashtagTouch}
+            >
+              <Text style={styles.hashtagItem}>#{tag}</Text>
+            </TouchableOpacity>
           ))}
         </View>
 
-        {/* Nhạc nền đang phát */}
-        <View style={styles.musicRow}>
+        {/* Nhạc nền đang phát - Bấm vào để dùng âm thanh này quay video mới */}
+        <TouchableOpacity
+          style={styles.musicRow}
+          activeOpacity={0.8}
+          onPress={() => {
+            if (currentVideo.music?.id) {
+              openCreateWithMusic(currentVideo.music.id);
+              showToast(`Đã chọn nhạc: ${currentVideo.music.title} 🎵`, 'info');
+            }
+          }}
+        >
           <Ionicons
             name="musical-notes"
             size={15}
@@ -317,7 +378,10 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           <Text style={styles.musicTitle} numberOfLines={1}>
             {currentVideo.music?.title} - {currentVideo.music?.artist}
           </Text>
-        </View>
+          <View style={styles.useSoundChip}>
+            <Text style={styles.useSoundText}>Dùng nhạc</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* 5. Modal bình luận */}
@@ -358,6 +422,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoCounterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -425,7 +491,7 @@ const styles = StyleSheet.create({
   },
   bottomInfoOverlay: {
     position: 'absolute',
-    bottom: 22,
+    bottom: 24,
     left: 16,
     right: 78,
     zIndex: 25,
@@ -466,7 +532,14 @@ const styles = StyleSheet.create({
   hashtagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 6,
     marginBottom: 8,
+  },
+  hashtagTouch: {
+    backgroundColor: 'rgba(56, 189, 248, 0.16)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   hashtagItem: {
     color: '#38BDF8',
@@ -476,7 +549,7 @@ const styles = StyleSheet.create({
   musicRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
@@ -486,6 +559,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
-    maxWidth: 220,
+    maxWidth: 185,
+  },
+  useSoundChip: {
+    marginLeft: 8,
+    backgroundColor: 'rgba(91, 75, 255, 0.85)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  useSoundText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
 });

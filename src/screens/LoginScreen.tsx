@@ -24,7 +24,7 @@ import { showMessage } from '../utils/dialog';
 
 export const LoginScreen: React.FC = () => {
   const { theme } = useTheme();
-  const { signIn, navigateTo, goBack, setTab } = useApp();
+  const { signIn, navigateTo, goBack, setTab, activeRoute } = useApp();
 
   const [email, setEmail] = useState('demo@vclip.vn');
   const [password, setPassword] = useState('123456');
@@ -51,7 +51,11 @@ export const LoginScreen: React.FC = () => {
       const res = await login({ email: targetEmail, password: targetPass });
       await signIn(res.user, res.token);
       showMessage('Thành công', `Chào mừng ${res.user.displayName} quay trở lại!`);
-      setTab('profile');
+      if (activeRoute.name === 'login' && activeRoute.redirectTo) {
+        navigateTo(activeRoute.redirectTo);
+      } else {
+        setTab('profile');
+      }
     } catch (err) {
       setServerError(getErrorMessage(err));
     } finally {

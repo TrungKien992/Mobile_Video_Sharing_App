@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -25,12 +25,23 @@ export const SearchScreen: React.FC = () => {
     creators,
     likedVideoIds,
     followedUserIds,
+    searchPresetQuery,
+    clearSearchPresetQuery,
     toggleFollowUser,
     navigateTo,
   } = useApp();
   const { theme } = useTheme();
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchPresetQuery || '');
+
+  useEffect(() => {
+    if (searchPresetQuery) {
+      setSearchQuery(searchPresetQuery);
+      setActiveTab('all');
+      clearSearchPresetQuery();
+    }
+  }, [searchPresetQuery, clearSearchPresetQuery]);
+
   // Sử dụng useDebounce 300ms theo đúng Bài Thực Hành Buổi 8 (BT8.6)
   const debouncedQuery = useDebounce(searchQuery, 300);
   const [activeTab, setActiveTab] = useState<SearchCategoryTab>('all');

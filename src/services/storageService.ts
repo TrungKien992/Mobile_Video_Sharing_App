@@ -136,6 +136,18 @@ export const StorageService = {
     }
   },
 
+  async incrementVideoView(videoId: string): Promise<number | undefined> {
+    try {
+      const res = await api.post<{ videoId: string; views: number }>(
+        `/api/videos/${videoId}/view`,
+        {}
+      );
+      return res?.views;
+    } catch {
+      return undefined;
+    }
+  },
+
   async getLikedVideoIds(): Promise<string[]> {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.LIKED_VIDEOS);

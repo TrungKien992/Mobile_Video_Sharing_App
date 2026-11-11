@@ -41,6 +41,12 @@ function getDefaultBaseUrl(): string {
 
 export const API_BASE_URL = getDefaultBaseUrl().replace(/\/$/, '');
 
+let currentAuthToken: string | null = null;
+
+export function setApiAuthToken(token: string | null) {
+  currentAuthToken = token;
+}
+
 export function resolveMediaUrl(url?: string): string {
   if (!url) return '';
   return url.replace(/^https?:\/\/(localhost|127\.0\.0\.1):3000/i, API_BASE_URL);
@@ -72,6 +78,9 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   const fetchHeaders: Record<string, string> = {
     ...headers,
   };
+  if (currentAuthToken && !fetchHeaders['Authorization']) {
+    fetchHeaders['Authorization'] = `Bearer ${currentAuthToken}`;
+  }
   if (!isFormData && body !== undefined) {
     fetchHeaders['Content-Type'] = 'application/json';
   }

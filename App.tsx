@@ -40,7 +40,13 @@ const MainNavigator: React.FC = () => {
       case 'live':
         return <LiveStreamScreen videoId={activeRoute.videoId} />;
       case 'create_post':
-        return <PostVideoScreen draftVideoUri={activeRoute.draftVideoUri} />;
+        return (
+          <PostVideoScreen
+            draftVideoUri={activeRoute.draftVideoUri}
+            selectedFilterId={activeRoute.selectedFilterId}
+            selectedMusicId={activeRoute.selectedMusicId}
+          />
+        );
       case 'creator_profile':
         return <CreatorProfileScreen userId={activeRoute.userId} />;
       case 'follow_list':
@@ -48,6 +54,7 @@ const MainNavigator: React.FC = () => {
           <FollowListScreen
             userId={activeRoute.userId}
             initialTab={activeRoute.initialTab}
+            isTabMode={false}
           />
         );
       case 'login':
@@ -68,7 +75,13 @@ const MainNavigator: React.FC = () => {
           case 'create':
             return <CreateVideoScreen />;
           case 'friends':
-            return <FollowListScreen userId={currentUser.id} initialTab="following" />;
+            return (
+              <FollowListScreen
+                userId={currentUser.id}
+                initialTab="following"
+                isTabMode={true}
+              />
+            );
           case 'profile':
             return <MyProfileScreen />;
           default:
@@ -84,7 +97,10 @@ const MainNavigator: React.FC = () => {
 
   const showTopHeader =
     activeRoute.name === 'main' &&
-    (currentTab === 'home' || currentTab === 'search' || currentTab === 'profile');
+    (currentTab === 'home' ||
+      currentTab === 'search' ||
+      currentTab === 'friends' ||
+      currentTab === 'profile');
 
   const showBottomTabBar =
     activeRoute.name === 'main' && currentTab !== 'create';

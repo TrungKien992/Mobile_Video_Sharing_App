@@ -14,6 +14,7 @@ export interface UserProfile {
   following?: number;
   likes?: number;
   followingIds?: string[];
+  followerIds?: string[];
   isFollowed?: boolean;
   isFollowing?: boolean;
   isVerified?: boolean;
@@ -125,6 +126,9 @@ export interface VideoDraft {
   videoUri: string;
   coverUri?: string;
   hashtags: string[];
+  category?: string;
+  filter?: string;
+  musicId?: string;
   commentsEnabled: boolean;
   privacy: 'all' | 'friends' | 'private';
   alsoPostOn: {

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,15 @@ import { INITIAL_MUSICS } from '../data/initialMusics';
 import { SAMPLE_UPLOAD_VIDEOS } from '../data/initialVideos';
 import { useApp } from '../context/AppContext';
 import { uploadFile } from '../api/client';
-import { showMessage } from '../utils/dialog';
+import { showMessage, showToast } from '../utils/dialog';
 
 export const CreateVideoScreen: React.FC = () => {
-  const { navigateTo, setTab } = useApp();
+  const {
+    navigateTo,
+    setTab,
+    createPresetMusicId,
+    clearCreatePresetMusic,
+  } = useApp();
 
   const [selectedSampleIdx, setSelectedSampleIdx] = useState(0);
   const currentSample = SAMPLE_UPLOAD_VIDEOS[selectedSampleIdx] || SAMPLE_UPLOAD_VIDEOS[0];
@@ -30,6 +35,7 @@ export const CreateVideoScreen: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<FilterItem>(INITIAL_FILTERS[0]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordTimer, setRecordTimer] = useState(0);
+  const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
   const [flashOn, setFlashOn] = useState(false);
   const [timerSetting, setTimerSetting] = useState<number | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -38,6 +44,35 @@ export const CreateVideoScreen: React.FC = () => {
   const [musicModalOpen, setMusicModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Tự động chọn nhạc nếu người dùng bấm "Dùng nhạc này" từ Trang chủ hoặc Màn hình xem video
+  useEffect(() => {
+    if (createPresetMusicId) {
+      const found = INITIAL_MUSICS.find((m) => m.id === createPresetMusicId);
+      if (found) {
+        setSelectedMusic(found);
+      }
+      clearCreatePresetMusic();
+    }
+  }, [createPresetMusicId, clearCreatePresetMusic]);
+
+  useEffect(() => {
+    return () => {
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, []);
+
+  const goToPostScreen = (videoUri: string) => {
+    navigateTo({
+      name: 'create_post',
+      draftVideoUri: videoUri,
+      selectedFilterId: selectedFilter.id,
+      selectedMusicId: selectedMusic.id,
+    });
+  };
 
   // Xử lý chọn file video thực từ máy tính trên Web -> Upload lên Express Server (/api/upload)
   const handleWebFileChange = async (event: any) => {
@@ -51,17 +86,10 @@ export const CreateVideoScreen: React.FC = () => {
         'Tải file thành công ✅',
         `Đã tải video "${file.name}" lên máy chủ Backend!`
       );
-      navigateTo({
-        name: 'create_post',
-        draftVideoUri: uploaded.url,
-      });
+      goToPostScreen(uploaded.url);
     } catch {
-      // Nếu backend bận, dùng ObjectURL trực tiếp để vẫn phát được video thực
       const localBlobUrl = URL.createObjectURL(file);
-      navigateTo({
-        name: 'create_post',
-        draftVideoUri: localBlobUrl,
-      });
+      goToPostScreen(localBlobUrl);
     } finally {
       setUploadingFile(false);
     }
@@ -86,44 +114,57 @@ export const CreateVideoScreen: React.FC = () => {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        navigateTo({
-          name: 'create_post',
-          draftVideoUri: asset.uri,
-        });
+        goToPostScreen(asset.uri);
       }
     } catch {
-      navigateTo({
-        name: 'create_post',
-        draftVideoUri: currentSample.videoUrl,
-      });
+      goToPostScreen(currentSample.videoUrl);
     }
   };
 
-  // Quay video / Chuyển sang bước điền thông tin đăng tải
-  const handleToggleRecord = () => {
-    if (!isRecording) {
-      setIsRecording(true);
-      setRecordTimer(0);
-      const interval = setInterval(() => {
-        setRecordTimer((t) => {
-          if (t >= 5) {
-            clearInterval(interval);
-            setIsRecording(false);
-            navigateTo({
-              name: 'create_post',
-              draftVideoUri: currentSample.videoUrl,
-            });
-            return 5;
-          }
-          return t + 1;
-        });
-      }, 1000);
-    } else {
-      setIsRecording(false);
-      navigateTo({
-        name: 'create_post',
-        draftVideoUri: currentSample.videoUrl,
+  const startRecordingNow = () => {
+    setIsRecording(true);
+    setRecordTimer(0);
+    recordIntervalRef.current = setInterval(() => {
+      setRecordTimer((t) => {
+        if (t >= 5) {
+          if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+          setIsRecording(false);
+          goToPostScreen(currentSample.videoUrl);
+          return 5;
+        }
+        return t + 1;
       });
+    }, 1000);
+  };
+
+  // Quay video (hỗ trợ đếm ngược 3s / 10s nếu bật Hẹn giờ)
+  const handleToggleRecord = () => {
+    if (countdownLeft !== null) {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      setCountdownLeft(null);
+      return;
+    }
+
+    if (!isRecording) {
+      if (timerSetting && timerSetting > 0) {
+        setCountdownLeft(timerSetting);
+        countdownIntervalRef.current = setInterval(() => {
+          setCountdownLeft((prev) => {
+            if (prev === null || prev <= 1) {
+              if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+              startRecordingNow();
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        startRecordingNow();
+      }
+    } else {
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+      setIsRecording(false);
+      goToPostScreen(currentSample.videoUrl);
     }
   };
 
@@ -150,6 +191,19 @@ export const CreateVideoScreen: React.FC = () => {
         showControls={false}
         filterOverlayColor={selectedFilter.overlayColor}
       />
+
+      {/* Hiệu ứng Đèn trợ sáng (Flash / Ring Light) khi bật Flash */}
+      {flashOn && <View pointerEvents="none" style={styles.flashRingOverlay} />}
+
+      {/* Đồng hồ đếm ngược Hẹn giờ (3s / 10s) trước khi quay */}
+      {countdownLeft !== null && (
+        <View style={styles.countdownOverlay}>
+          <View style={styles.countdownCircle}>
+            <Text style={styles.countdownNumber}>{countdownLeft}</Text>
+          </View>
+          <Text style={styles.countdownLabel}>Chuẩn bị ghi hình...</Text>
+        </View>
+      )}
 
       {/* 2. Top bar: Nút đóng, Chọn âm thanh & Nút Tiếp tục */}
       <View style={styles.topBar}>
@@ -179,25 +233,29 @@ export const CreateVideoScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.nextStepBtn}
-          onPress={() =>
-            navigateTo({
-              name: 'create_post',
-              draftVideoUri: currentSample.videoUrl,
-            })
-          }
+          onPress={() => goToPostScreen(currentSample.videoUrl)}
           activeOpacity={0.85}
         >
           <Text style={styles.nextStepText}>Tiếp tục →</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Badge hiển thị bộ lọc đang áp dụng */}
+      {selectedFilter.id !== 'none' && (
+        <View style={styles.activeFilterPill}>
+          <Ionicons name="color-filter" size={12} color="#FBBF24" />
+          <Text style={styles.activeFilterText}>Bộ lọc: {selectedFilter.nameVi}</Text>
+        </View>
+      )}
+
       {/* 3. Thanh công cụ bên phải */}
       <View style={styles.rightToolbar}>
         <TouchableOpacity
           style={styles.toolItem}
-          onPress={() =>
-            setSelectedSampleIdx((prev) => (prev + 1) % SAMPLE_UPLOAD_VIDEOS.length)
-          }
+          onPress={() => {
+            setSelectedSampleIdx((prev) => (prev + 1) % SAMPLE_UPLOAD_VIDEOS.length);
+            showToast('Đã chuyển cảnh quay mẫu 🎥', 'info');
+          }}
           activeOpacity={0.8}
         >
           <Ionicons name="sync-outline" size={24} color="#FFFFFF" />
@@ -205,28 +263,58 @@ export const CreateVideoScreen: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.toolItem}
+          style={[
+            styles.toolItem,
+            selectedFilter.id !== 'none' && { borderColor: '#FF2A6D', borderWidth: 1.5 },
+          ]}
           onPress={() => setFilterModalOpen(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="color-filter-outline" size={24} color="#FFFFFF" />
-          <Text style={styles.toolLabel}>Bộ lọc</Text>
+          <Ionicons
+            name="color-filter-outline"
+            size={24}
+            color={selectedFilter.id !== 'none' ? '#FF2A6D' : '#FFFFFF'}
+          />
+          <Text style={styles.toolLabel}>{selectedFilter.nameVi}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.toolItem}
-          onPress={() => setTimerSetting((t) => (t === 3 ? 10 : t === 10 ? null : 3))}
+          style={[
+            styles.toolItem,
+            timerSetting !== null && { borderColor: '#38BDF8', borderWidth: 1.5 },
+          ]}
+          onPress={() => {
+            const next = timerSetting === 3 ? 10 : timerSetting === 10 ? null : 3;
+            setTimerSetting(next);
+            showToast(
+              next ? `Đã bật hẹn giờ đếm ngược ${next} giây ⏱` : 'Đã tắt hẹn giờ',
+              'info'
+            );
+          }}
           activeOpacity={0.8}
         >
-          <Ionicons name="timer-outline" size={24} color="#FFFFFF" />
+          <Ionicons
+            name="timer-outline"
+            size={24}
+            color={timerSetting ? '#38BDF8' : '#FFFFFF'}
+          />
           <Text style={styles.toolLabel}>
             {timerSetting ? `${timerSetting}s` : 'Hẹn giờ'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.toolItem}
-          onPress={() => setFlashOn((f) => !f)}
+          style={[
+            styles.toolItem,
+            flashOn && { borderColor: '#FBBF24', borderWidth: 1.5 },
+          ]}
+          onPress={() => {
+            setFlashOn((f) => {
+              const next = !f;
+              showToast(next ? 'Đã bật đèn trợ sáng Flash ⚡' : 'Đã tắt đèn Flash', 'info');
+              return next;
+            });
+          }}
           activeOpacity={0.8}
         >
           <Ionicons
@@ -234,7 +322,7 @@ export const CreateVideoScreen: React.FC = () => {
             size={24}
             color={flashOn ? '#FBBF24' : '#FFFFFF'}
           />
-          <Text style={styles.toolLabel}>Đèn</Text>
+          <Text style={styles.toolLabel}>{flashOn ? 'Bật đèn' : 'Đèn'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -320,6 +408,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     position: 'relative',
   },
+  flashRingOverlay: {
+    ...StyleSheet.absoluteFill,
+    borderWidth: 14,
+    borderColor: 'rgba(255, 251, 235, 0.85)',
+    backgroundColor: 'rgba(255, 250, 220, 0.14)',
+    zIndex: 12,
+  },
+  countdownOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(9, 13, 22, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 35,
+  },
+  countdownCircle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255, 51, 102, 0.9)',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countdownNumber: {
+    color: '#FFFFFF',
+    fontSize: 52,
+    fontWeight: '900',
+  },
+  countdownLabel: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 14,
+  },
   topBar: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 44 : 18,
@@ -345,7 +468,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    maxWidth: 180,
+    maxWidth: 185,
   },
   addAudioText: {
     color: '#FFFFFF',
@@ -363,6 +486,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  activeFilterPill: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 92 : 68,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 20,
+  },
+  activeFilterText: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   rightToolbar: {
     position: 'absolute',
     right: 16,
@@ -376,13 +517,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
     padding: 8,
     borderRadius: 14,
-    width: 56,
+    width: 60,
   },
   toolLabel: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 3,
+    textAlign: 'center',
   },
   recordingTimerBadge: {
     position: 'absolute',

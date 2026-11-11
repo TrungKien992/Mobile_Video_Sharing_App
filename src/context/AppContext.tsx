@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { BackHandler, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AppNotification,
   CommentItem,
@@ -14,6 +16,7 @@ import { loadAuth, saveAuth, clearAuth } from '../storage/authStorage';
 import { useAutoPersist } from '../hooks/useAutoPersist';
 import * as notificationService from '../services/notificationService';
 import * as commentService from '../services/commentService';
+import { setApiAuthToken } from '../api/client';
 import { showToast } from '../utils/dialog';
 
 export interface AppContextType {
@@ -27,6 +30,10 @@ export interface AppContextType {
   likedVideoIds: Set<string>;
   bookmarkedVideoIds: Set<string>;
   followedUserIds: Set<string>;
+  savedFilterIds: Set<string>;
+  savedMusicIds: Set<string>;
+  searchPresetQuery: string;
+  createPresetMusicId: string | null;
   comments: CommentItem[];
   notifications: AppNotification[];
   unreadNotificationCount: number;
@@ -39,6 +46,13 @@ export interface AppContextType {
   toggleLikeVideo: (videoId: string) => Promise<void>;
   toggleBookmarkVideo: (videoId: string) => Promise<void>;
   toggleFollowUser: (userId: string) => Promise<void>;
+  toggleSaveFilter: (filterId: string) => void;
+  toggleSaveMusic: (musicId: string) => void;
+  incrementVideoView: (videoId: string) => Promise<void>;
+  openSearchWithQuery: (query: string) => void;
+  clearSearchPresetQuery: () => void;
+  openCreateWithMusic: (musicId: string) => void;
+  clearCreatePresetMusic: () => void;
   addComment: (videoId: string, text: string, rating?: number) => Promise<CommentItem>;
   toggleLikeComment: (commentId: string) => Promise<void>;
   addNewVideo: (videoData: Partial<VideoItem>) => Promise<VideoItem>;
@@ -66,10 +80,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [likedVideoIds, setLikedVideoIds] = useState<Set<string>>(new Set());
   const [bookmarkedVideoIds, setBookmarkedVideoIds] = useState<Set<string>>(new Set());
   const [followedUserIds, setFollowedUserIds] = useState<Set<string>>(new Set());
+  const [savedFilterIds, setSavedFilterIds] = useState<Set<string>>(new Set(['film', 'spring']));
+  const [savedMusicIds, setSavedMusicIds] = useState<Set<string>>(new Set(['m1', 'm3']));
+  const [searchPresetQuery, setSearchPresetQuery] = useState<string>('');
+  const [createPresetMusicId, setCreatePresetMusicId] = useState<string | null>(null);
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [ready, setReady] = useState<boolean>(false);
+
+  useEffect(() => {
+    setApiAuthToken(token);
+  }, [token]);
 
   // Nạp dữ liệu khởi động từ MongoDB Backend + AsyncStorage (Hydration)
   useEffect(() => {
@@ -151,6 +173,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setComments(allComments);
         setCreators(syncedCreators);
         setNotifications(userNotifs);
+
+        try {
+          const [rawSavedFilters, rawSavedMusics] = await Promise.all([
+            AsyncStorage.getItem('@vclip_saved_filters_v2'),
+            AsyncStorage.getItem('@vclip_saved_musics_v2'),
+          ]);
+          if (rawSavedFilters) {
+            setSavedFilterIds(new Set(JSON.parse(rawSavedFilters)));
+          }
+          if (rawSavedMusics) {
+            setSavedMusicIds(new Set(JSON.parse(rawSavedMusics)));
+          }
+        } catch {}
       } catch (err) {
         console.error('Lỗi nạp dữ liệu khởi động:', err);
       } finally {
@@ -166,19 +201,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useAutoPersist('@vclip_liked_videos_v2', Array.from(likedVideoIds), ready);
   useAutoPersist('@vclip_bookmarked_videos_v2', Array.from(bookmarkedVideoIds), ready);
   useAutoPersist('@vclip_followed_users_v2', Array.from(followedUserIds), ready);
+  useAutoPersist('@vclip_saved_filters_v2', Array.from(savedFilterIds), ready);
+  useAutoPersist('@vclip_saved_musics_v2', Array.from(savedMusicIds), ready);
   useAutoPersist('@vclip_videos_v2', videos, ready);
   useAutoPersist('@vclip_comments_v2', comments, ready);
   useAutoPersist('@vclip_notifications_v2', notifications, ready);
 
-  const navigateTo = (route: ScreenRoute) => {
-    setRouteHistory((prev) => [...prev, activeRoute]);
-    setActiveRoute(route);
-    if (route.name === 'main' && route.tab) {
-      setCurrentTab(route.tab);
-    }
-  };
+  const navigateTo = useCallback(
+    (route: ScreenRoute) => {
+      setRouteHistory((prev) => [...prev, activeRoute]);
+      setActiveRoute(route);
+      if (route.name === 'main' && route.tab) {
+        setCurrentTab(route.tab);
+      }
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.pushState) {
+        try {
+          window.history.pushState({ route }, '');
+        } catch {}
+      }
+    },
+    [activeRoute]
+  );
 
-  const goBack = () => {
+  const goBack = useCallback(() => {
     if (routeHistory.length > 0) {
       const prev = routeHistory[routeHistory.length - 1];
       setRouteHistory((h) => h.slice(0, h.length - 1));
@@ -186,16 +231,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (prev.name === 'main' && prev.tab) {
         setCurrentTab(prev.tab);
       }
-    } else {
+      return true;
+    } else if (activeRoute.name !== 'main' || currentTab !== 'home') {
       setActiveRoute({ name: 'main', tab: 'home' });
       setCurrentTab('home');
+      return true;
     }
-  };
+    return false;
+  }, [routeHistory, activeRoute, currentTab]);
+
+  // Hỗ trợ nút Back cứng trên Android & nút Back trình duyệt trên Web
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        return goBack();
+      });
+      return () => sub.remove();
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const onPopState = () => {
+        goBack();
+      };
+      window.addEventListener('popstate', onPopState);
+      return () => window.removeEventListener('popstate', onPopState);
+    }
+  }, [goBack]);
 
   const setTab = (tab: MainTabType) => {
+    if (activeRoute.name !== 'main') {
+      setRouteHistory((prev) => [...prev, activeRoute]);
+    }
     setCurrentTab(tab);
     setActiveRoute({ name: 'main', tab });
   };
+
+  const openSearchWithQuery = (query: string) => {
+    setSearchPresetQuery(query.replace(/^#/, '').trim());
+    setCurrentTab('search');
+    setActiveRoute({ name: 'main', tab: 'search' });
+  };
+
+  const clearSearchPresetQuery = () => {
+    setSearchPresetQuery('');
+  };
+
+  const openCreateWithMusic = (musicId: string) => {
+    setCreatePresetMusicId(musicId);
+    setCurrentTab('create');
+    setActiveRoute({ name: 'main', tab: 'create' });
+  };
+
+  const clearCreatePresetMusic = () => {
+    setCreatePresetMusicId(null);
+  };
+
+  const toggleSaveFilter = (filterId: string) => {
+    setSavedFilterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(filterId)) {
+        next.delete(filterId);
+        showToast('Đã bỏ lưu bộ lọc', 'info');
+      } else {
+        next.add(filterId);
+        showToast('Đã lưu bộ lọc vào mục yêu thích ✨', 'bookmark');
+      }
+      return next;
+    });
+  };
+
+  const toggleSaveMusic = (musicId: string) => {
+    setSavedMusicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(musicId)) {
+        next.delete(musicId);
+        showToast('Đã bỏ lưu âm thanh', 'info');
+      } else {
+        next.add(musicId);
+        showToast('Đã lưu âm thanh vào mục yêu thích 🎵', 'bookmark');
+      }
+      return next;
+    });
+  };
+
+  const incrementVideoView = useCallback(async (videoId: string) => {
+    const newViews = await StorageService.incrementVideoView(videoId);
+    setVideos((prev) =>
+      prev.map((v) =>
+        v.id === videoId
+          ? { ...v, views: newViews !== undefined ? newViews : (v.views || 0) + 1 }
+          : v
+      )
+    );
+  }, []);
 
   const signIn = async (user: UserProfile, authToken: string) => {
     setCurrentUser(user);
@@ -507,6 +634,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         likedVideoIds,
         bookmarkedVideoIds,
         followedUserIds,
+        savedFilterIds,
+        savedMusicIds,
+        searchPresetQuery,
+        createPresetMusicId,
         comments,
         notifications,
         unreadNotificationCount,
@@ -519,6 +650,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleLikeVideo,
         toggleBookmarkVideo,
         toggleFollowUser,
+        toggleSaveFilter,
+        toggleSaveMusic,
+        incrementVideoView,
+        openSearchWithQuery,
+        clearSearchPresetQuery,
+        openCreateWithMusic,
+        clearCreatePresetMusic,
         addComment,
         toggleLikeComment,
         addNewVideo,

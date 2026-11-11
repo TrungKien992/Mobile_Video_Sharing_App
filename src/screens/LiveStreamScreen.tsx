@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,6 +32,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
     videos.find((v) => v.isLive) ||
     videos[0];
 
+  const chatScrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
   const [hearts, setHearts] = useState<{ id: string; color: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [liveMessages, setLiveMessages] = useState<LiveMessage[]>([
@@ -53,6 +55,14 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
       text: 'Shop giao hàng về Đà Nẵng mất mấy ngày vậy?',
     },
   ]);
+
+  // Tự động cuộn xuống tin nhắn mới nhất
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [liveMessages.length]);
 
   const addReaction = (color: string = '#FF2A6D') => {
     const newHeart = { id: 'heart_' + Date.now() + Math.random(), color };
@@ -93,18 +103,22 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       {/* 1. Video Player Live Stream */}
       <VideoPlayer
         videoUrl={liveVideo.videoUrl}
         thumbnailUrl={liveVideo.thumbnailUrl}
         isPlaying={true}
         isLooping={true}
+        onDoubleTap={() => addReaction('#FF3366')}
       />
 
       <LinearGradient
-        colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']}
-        locations={[0, 0.4, 0.85]}
+        colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.85)']}
+        locations={[0, 0.4, 0.82]}
         style={styles.scrim}
         pointerEvents="none"
       />
@@ -167,9 +181,10 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
         </TouchableOpacity>
       </View>
 
-      {/* 5. Bình luận trực tiếp nổi (Live Chat overlay) */}
+      {/* 5. Bình luận trực tiếp nổi (Live Chat overlay mở rộng & tự cuộn) */}
       <View style={styles.liveChatContainer}>
         <ScrollView
+          ref={chatScrollRef}
           style={styles.chatScroll}
           contentContainerStyle={styles.chatContent}
           showsVerticalScrollIndicator={false}
@@ -188,14 +203,26 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
 
       {/* 6. Thanh nhập chat & nút thả reaction */}
       <View style={styles.bottomBar}>
-        <TextInput
-          style={styles.chatInput}
-          placeholder="Để lại bình luận..."
-          placeholderTextColor="rgba(255,255,255,0.6)"
-          value={chatInput}
-          onChangeText={setChatInput}
-          onSubmitEditing={handleSendMessage}
-        />
+        <View style={styles.chatInputWrap}>
+          <TextInput
+            style={styles.chatInput}
+            placeholder="Để lại bình luận..."
+            placeholderTextColor="rgba(255,255,255,0.6)"
+            value={chatInput}
+            onChangeText={setChatInput}
+            onSubmitEditing={handleSendMessage}
+            returnKeyType="send"
+          />
+          {chatInput.trim().length > 0 && (
+            <TouchableOpacity
+              style={styles.sendChatBtn}
+              onPress={handleSendMessage}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="send" size={15} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.reactionsRow}>
           <TouchableOpacity
@@ -221,7 +248,7 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -284,7 +311,7 @@ const styles = StyleSheet.create({
   },
   pinnedProductCard: {
     position: 'absolute',
-    bottom: 150,
+    bottom: 235,
     left: 16,
     right: 16,
     backgroundColor: '#FFFFFF',
@@ -343,8 +370,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 70,
     left: 16,
-    right: 80,
-    maxHeight: 70,
+    right: 76,
+    maxHeight: 155,
     zIndex: 10,
   },
   chatScroll: {
@@ -352,14 +379,15 @@ const styles = StyleSheet.create({
   },
   chatContent: {
     justifyContent: 'flex-end',
+    paddingVertical: 4,
   },
   chatBubble: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     marginBottom: 6,
     alignSelf: 'flex-start',
   },
@@ -371,37 +399,53 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   chatTextWrap: {
-    maxWidth: 220,
+    maxWidth: 230,
   },
   chatSender: {
-    color: '#E5E7EB',
+    color: '#38BDF8',
     fontSize: 11,
     fontWeight: '700',
   },
   chatMessage: {
     color: '#FFFFFF',
     fontSize: 12,
+    lineHeight: 16,
   },
   bottomBar: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 14,
     left: 16,
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 20,
   },
-  chatInput: {
+  chatInputWrap: {
     flex: 1,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    color: '#FFFFFF',
-    paddingHorizontal: 16,
-    fontSize: 13,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    paddingRight: 6,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  chatInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    height: '100%',
+  },
+  sendChatBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#5B4BFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   reactionsRow: {
     flexDirection: 'row',

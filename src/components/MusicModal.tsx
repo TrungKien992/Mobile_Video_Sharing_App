@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,15 @@ import {
   TouchableOpacity,
   Image,
   FlatList,
+  TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useVideoPlayer } from 'expo-video';
 import { MusicItem } from '../types';
 import { INITIAL_MUSICS } from '../data/initialMusics';
 import { useTheme } from '../context/ThemeContext';
+import { useApp } from '../context/AppContext';
 
 interface MusicModalProps {
   visible: boolean;
@@ -20,6 +24,8 @@ interface MusicModalProps {
   onClose: () => void;
 }
 
+const TRENDING_MUSIC_IDS = ['m1', 'm2', 'm4', 'm6'];
+
 export const MusicModal: React.FC<MusicModalProps> = ({
   visible,
   selectedMusicId,
@@ -27,27 +33,109 @@ export const MusicModal: React.FC<MusicModalProps> = ({
   onClose,
 }) => {
   const { theme } = useTheme();
+  const { savedMusicIds, toggleSaveMusic } = useApp();
   const [activeTab, setActiveTab] = useState<'foryou' | 'trending' | 'saved'>('foryou');
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const webAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const activePreviewSong = INITIAL_MUSICS.find((m) => m.id === playingId);
+  const nativeAudioPlayer = useVideoPlayer(
+    Platform.OS === 'web' ? null : activePreviewSong?.audioUrl || null,
+    (p) => {
+      p.loop = true;
+      if (playingId) {
+        p.play();
+      }
+    }
+  );
+
+  // Quản lý phát nhạc thực tế khi bấm nút nghe thử (Preview)
+  useEffect(() => {
+    if (!visible) {
+      setPlayingId(null);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (webAudioRef.current) {
+        webAudioRef.current.pause();
+        webAudioRef.current = null;
+      }
+      if (playingId && activePreviewSong?.audioUrl && typeof Audio !== 'undefined') {
+        try {
+          const audio = new Audio(activePreviewSong.audioUrl);
+          audio.loop = true;
+          audio.volume = 0.8;
+          audio.play().catch(() => {});
+          webAudioRef.current = audio;
+        } catch {}
+      }
+      return () => {
+        if (webAudioRef.current) {
+          webAudioRef.current.pause();
+          webAudioRef.current = null;
+        }
+      };
+    } else {
+      try {
+        if (playingId && activePreviewSong?.audioUrl) {
+          nativeAudioPlayer.play();
+        } else {
+          nativeAudioPlayer.pause();
+        }
+      } catch {}
+    }
+  }, [playingId, activePreviewSong, nativeAudioPlayer]);
 
   const togglePreview = (id: string) => {
     setPlayingId((prev) => (prev === id ? null : id));
   };
 
+  const filteredMusics = INITIAL_MUSICS.filter((m) => {
+    if (activeTab === 'trending' && !TRENDING_MUSIC_IDS.includes(m.id)) {
+      return false;
+    }
+    if (activeTab === 'saved' && !savedMusicIds.has(m.id)) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        m.title.toLowerCase().includes(q) || m.artist.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
   const renderMusicItem = ({ item }: { item: MusicItem }) => {
     const isPlaying = playingId === item.id;
     const isSelected = selectedMusicId === item.id;
+    const isSaved = savedMusicIds.has(item.id);
 
     return (
-      <View style={[styles.musicItemRow, isSelected && { backgroundColor: theme.primaryLight }]}>
-        {/* Cover + Play overlay */}
+      <View
+        style={[
+          styles.musicItemRow,
+          isSelected && { backgroundColor: theme.primaryLight },
+        ]}
+      >
+        {/* Cover + Play overlay thực tế */}
         <TouchableOpacity
           style={styles.coverWrapper}
           onPress={() => togglePreview(item.id)}
           activeOpacity={0.8}
         >
           <Image source={{ uri: item.coverUrl }} style={styles.coverImg} />
-          <View style={styles.playOverlay}>
+          <View
+            style={[
+              styles.playOverlay,
+              isPlaying && { backgroundColor: 'rgba(255, 42, 109, 0.55)' },
+            ]}
+          >
             <Ionicons
               name={isPlaying ? 'pause' : 'play'}
               size={18}
@@ -57,14 +145,26 @@ export const MusicModal: React.FC<MusicModalProps> = ({
         </TouchableOpacity>
 
         {/* Thông tin bài hát */}
-        <View style={styles.musicInfo}>
-          <Text style={[styles.songTitle, { color: theme.text }]} numberOfLines={1}>
-            {item.title}
-          </Text>
+        <TouchableOpacity
+          style={styles.musicInfo}
+          activeOpacity={0.8}
+          onPress={() => togglePreview(item.id)}
+        >
+          <View style={styles.titleRow}>
+            <Text style={[styles.songTitle, { color: theme.text }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {isPlaying && (
+              <View style={styles.playingBadge}>
+                <Ionicons name="volume-high" size={11} color="#FF2A6D" />
+                <Text style={styles.playingBadgeText}>Đang phát</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.artistText, { color: theme.textSecondary }]}>
             {item.artist} • {item.duration}
           </Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Nút "Sử dụng" */}
         <TouchableOpacity
@@ -72,7 +172,10 @@ export const MusicModal: React.FC<MusicModalProps> = ({
             styles.useBtn,
             isSelected ? styles.selectedUseBtn : { borderColor: theme.primary },
           ]}
-          onPress={() => onSelectMusic(item)}
+          onPress={() => {
+            setPlayingId(null);
+            onSelectMusic(item);
+          }}
           activeOpacity={0.8}
         >
           <Text
@@ -85,9 +188,17 @@ export const MusicModal: React.FC<MusicModalProps> = ({
           </Text>
         </TouchableOpacity>
 
-        {/* More options button */}
-        <TouchableOpacity style={styles.moreBtn} activeOpacity={0.7}>
-          <Ionicons name="ellipsis-horizontal" size={18} color={theme.textMuted} />
+        {/* Nút Lưu nhạc yêu thích */}
+        <TouchableOpacity
+          style={styles.moreBtn}
+          onPress={() => toggleSaveMusic(item.id)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={isSaved ? 'bookmark' : 'bookmark-outline'}
+            size={19}
+            color={isSaved ? '#F59E0B' : theme.textMuted}
+          />
         </TouchableOpacity>
       </View>
     );
@@ -101,16 +212,43 @@ export const MusicModal: React.FC<MusicModalProps> = ({
         <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.title, { color: theme.text }]}>Thêm âm thanh</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Kho Âm thanh VClip</Text>
             <View style={styles.headerRight}>
-              <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
-                <Ionicons name="search-outline" size={20} color={theme.text} />
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => setShowSearch((s) => !s)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={20}
+                  color={showSearch ? '#FF2A6D' : theme.text}
+                />
               </TouchableOpacity>
               <TouchableOpacity onPress={onClose} style={styles.iconBtn} activeOpacity={0.7}>
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Thanh tìm kiếm bài hát */}
+          {showSearch && (
+            <View style={[styles.searchBox, { backgroundColor: theme.surfaceVariant }]}>
+              <Ionicons name="search" size={16} color={theme.textMuted} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder="Tìm theo tên bài hát hoặc nghệ sĩ..."
+                placeholderTextColor={theme.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={16} color={theme.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Sub tabs */}
           <View style={styles.tabRow}>
@@ -126,7 +264,7 @@ export const MusicModal: React.FC<MusicModalProps> = ({
                     : { color: theme.textSecondary },
                 ]}
               >
-                Cho bạn
+                Cho bạn ({INITIAL_MUSICS.length})
               </Text>
             </TouchableOpacity>
 
@@ -142,7 +280,7 @@ export const MusicModal: React.FC<MusicModalProps> = ({
                     : { color: theme.textSecondary },
                 ]}
               >
-                Xu hướng
+                🔥 Xu hướng
               </Text>
             </TouchableOpacity>
 
@@ -158,17 +296,25 @@ export const MusicModal: React.FC<MusicModalProps> = ({
                     : { color: theme.textSecondary },
                 ]}
               >
-                Đã lưu
+                🔖 Đã lưu ({savedMusicIds.size})
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Music List */}
           <FlatList
-            data={INITIAL_MUSICS}
+            data={filteredMusics}
             keyExtractor={(item) => item.id}
             renderItem={renderMusicItem}
             contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Ionicons name="musical-notes-outline" size={36} color={theme.textMuted} />
+                <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                  Không tìm thấy giai điệu phù hợp
+                </Text>
+              </View>
+            }
           />
         </View>
       </View>
@@ -186,7 +332,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalSheet: {
-    height: 480,
+    height: 500,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -211,14 +357,28 @@ const styles = StyleSheet.create({
   iconBtn: {
     padding: 4,
   },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 12,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+  },
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    gap: 12,
+    gap: 10,
   },
   tabBtn: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     paddingVertical: 6,
     borderRadius: 16,
   },
@@ -226,8 +386,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF2A6D',
   },
   tabBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   activeTabBtnText: {
     color: '#FFFFFF',
@@ -264,11 +424,32 @@ const styles = StyleSheet.create({
   },
   musicInfo: {
     flex: 1,
+    marginRight: 8,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
   },
   songTitle: {
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 3,
+    flexShrink: 1,
+  },
+  playingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255, 42, 109, 0.14)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  playingBadgeText: {
+    color: '#FF2A6D',
+    fontSize: 9,
+    fontWeight: '800',
   },
   artistText: {
     fontSize: 12,
@@ -278,7 +459,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    marginRight: 8,
+    marginRight: 6,
   },
   selectedUseBtn: {
     backgroundColor: '#FF2A6D',
@@ -293,5 +474,13 @@ const styles = StyleSheet.create({
   },
   moreBtn: {
     padding: 6,
+  },
+  emptyWrap: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 13,
   },
 });

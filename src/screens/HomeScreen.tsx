@@ -38,7 +38,15 @@ const CATEGORIES = [
 ];
 
 export const HomeScreen: React.FC = () => {
-  const { videos, creators, currentUser, navigateTo, refreshVideos, setTab } = useApp();
+  const {
+    videos,
+    creators,
+    currentUser,
+    navigateTo,
+    refreshVideos,
+    setTab,
+    openCreateWithMusic,
+  } = useApp();
   const { theme } = useTheme();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả');
@@ -351,9 +359,16 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigateTo({ name: 'live', videoId: item.id })}
           >
             <Image source={{ uri: item.thumbnailUrl }} style={styles.liveImg} />
-            <View style={styles.liveBadge}>
+            <View
+              style={[
+                styles.liveBadge,
+                !item.isLive && { backgroundColor: '#5B4BFF' },
+              ]}
+            >
               <View style={styles.liveDot} />
-              <Text style={styles.liveBadgeText}>TRỰC TIẾP</Text>
+              <Text style={styles.liveBadgeText}>
+                {item.isLive ? 'TRỰC TIẾP' : 'PHÒNG LIVE'}
+              </Text>
             </View>
             <LinearGradient
               colors={['transparent', 'rgba(9,13,22,0.85)']}
@@ -363,7 +378,7 @@ export const HomeScreen: React.FC = () => {
                 {item.title}
               </Text>
               <Text style={styles.liveViewerCount}>
-                🔥 {formatNumber(item.views)} người đang xem
+                🔥 {formatNumber(item.liveViewerCount || item.views)} người đang xem
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -397,7 +412,7 @@ export const HomeScreen: React.FC = () => {
               { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
             activeOpacity={0.8}
-            onPress={() => setTab('create')}
+            onPress={() => openCreateWithMusic(item.id)}
           >
             <Image source={{ uri: item.coverUrl }} style={styles.audioCover} />
             <Text style={[styles.audioTitle, { color: theme.text }]} numberOfLines={1}>

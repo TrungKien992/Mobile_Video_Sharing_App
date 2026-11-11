@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FilterItem } from '../types';
 import { INITIAL_FILTERS } from '../data/initialFilters';
 import { useTheme } from '../context/ThemeContext';
+import { useApp } from '../context/AppContext';
 
 interface FilterModalProps {
   visible: boolean;
@@ -20,6 +21,8 @@ interface FilterModalProps {
   onClose: () => void;
 }
 
+const TRENDING_FILTER_IDS = ['none', 'film', 'art', 'spring', 'contrast'];
+
 export const FilterModal: React.FC<FilterModalProps> = ({
   visible,
   selectedFilterId,
@@ -27,10 +30,22 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   onClose,
 }) => {
   const { theme } = useTheme();
+  const { savedFilterIds, toggleSaveFilter } = useApp();
   const [activeTab, setActiveTab] = useState<'foryou' | 'trending' | 'saved'>('foryou');
+
+  const displayedFilters = INITIAL_FILTERS.filter((f) => {
+    if (activeTab === 'trending') {
+      return TRENDING_FILTER_IDS.includes(f.id);
+    }
+    if (activeTab === 'saved') {
+      return f.id === 'none' || savedFilterIds.has(f.id);
+    }
+    return true;
+  });
 
   const renderFilterItem = ({ item }: { item: FilterItem }) => {
     const isSelected = item.id === selectedFilterId;
+    const isSaved = savedFilterIds.has(item.id);
 
     return (
       <TouchableOpacity
@@ -41,7 +56,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
         <View
           style={[
             styles.thumbnailWrapper,
-            isSelected && { borderColor: '#FF2A6D', borderWidth: 2 },
+            isSelected && { borderColor: '#FF2A6D', borderWidth: 2.5 },
           ]}
         >
           {item.id === 'none' ? (
@@ -52,7 +67,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
             <Image source={{ uri: item.sampleThumbnail }} style={styles.thumbnailImg} />
           )}
 
-          {/* Lớp màu giả lập bộ lọc */}
+          {/* Lớp màu bộ lọc */}
           {item.overlayColor && item.overlayColor !== 'transparent' && (
             <View
               style={[
@@ -64,8 +79,22 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 
           {isSelected && (
             <View style={styles.selectedBadge}>
-              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+              <Ionicons name="checkmark" size={13} color="#FFFFFF" />
             </View>
+          )}
+
+          {item.id !== 'none' && (
+            <TouchableOpacity
+              style={styles.saveFilterBtn}
+              onPress={() => toggleSaveFilter(item.id)}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                size={12}
+                color={isSaved ? '#FBBF24' : '#FFFFFF'}
+              />
+            </TouchableOpacity>
           )}
         </View>
         <Text
@@ -89,7 +118,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
         <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.title, { color: theme.text }]}>Thêm bộ lọc</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Thêm bộ lọc màu</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
@@ -112,7 +141,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                     : { color: theme.textSecondary },
                 ]}
               >
-                Cho bạn
+                Cho bạn ({INITIAL_FILTERS.length})
               </Text>
             </TouchableOpacity>
 
@@ -131,7 +160,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                     : { color: theme.textSecondary },
                 ]}
               >
-                Xu hướng
+                🔥 Xu hướng
               </Text>
             </TouchableOpacity>
 
@@ -150,14 +179,14 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                     : { color: theme.textSecondary },
                 ]}
               >
-                Đã lưu
+                🔖 Đã lưu ({savedFilterIds.size})
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Filter Grid */}
           <FlatList
-            data={INITIAL_FILTERS}
+            data={displayedFilters}
             keyExtractor={(item) => item.id}
             renderItem={renderFilterItem}
             numColumns={4}
@@ -179,7 +208,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalSheet: {
-    height: 380,
+    height: 390,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -203,10 +232,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    gap: 12,
+    gap: 10,
   },
   tabBtn: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     paddingVertical: 6,
     borderRadius: 16,
   },
@@ -214,8 +243,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF2A6D',
   },
   tabBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   activeTabBtnText: {
     color: '#FFFFFF',
@@ -249,7 +278,7 @@ const styles = StyleSheet.create({
   selectedBadge: {
     position: 'absolute',
     top: 4,
-    right: 4,
+    left: 4,
     width: 18,
     height: 18,
     borderRadius: 9,
@@ -257,9 +286,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  saveFilterBtn: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filterName: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
     marginTop: 4,
     textAlign: 'center',
   },

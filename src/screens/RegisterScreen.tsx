@@ -25,7 +25,7 @@ import { showMessage } from '../utils/dialog';
 
 export const RegisterScreen: React.FC = () => {
   const { theme } = useTheme();
-  const { signIn, navigateTo, goBack, setTab } = useApp();
+  const { signIn, navigateTo, goBack, setTab, activeRoute } = useApp();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -76,7 +76,11 @@ export const RegisterScreen: React.FC = () => {
       });
       await signIn(res.user, res.token);
       showMessage('Đăng ký thành công 🎉', `Tài khoản ${res.user.email} đã được tạo và lưu vào MongoDB!`);
-      setTab('profile');
+      if (activeRoute.name === 'register' && activeRoute.redirectTo) {
+        navigateTo(activeRoute.redirectTo);
+      } else {
+        setTab('profile');
+      }
     } catch (err) {
       setServerError(getErrorMessage(err));
     } finally {

@@ -18,10 +18,13 @@ import { formatNumber } from '../utils/format';
 interface FollowListScreenProps {
   userId: string;
   initialTab?: 'followers' | 'following';
+  isTabMode?: boolean;
 }
 
 export const FollowListScreen: React.FC<FollowListScreenProps> = ({
+  userId,
   initialTab = 'following',
+  isTabMode = false,
 }) => {
   const {
     currentUser,
@@ -36,9 +39,27 @@ export const FollowListScreen: React.FC<FollowListScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'followers' | 'following'>(initialTab);
   const [filterQuery, setFilterQuery] = useState('');
 
-  const otherUsers = creators.filter((c) => c.id !== currentUser.id);
-  const followingList = otherUsers.filter((c) => followedUserIds.has(c.id));
-  const followersList = otherUsers;
+  const targetUser =
+    userId === currentUser.id
+      ? currentUser
+      : creators.find((c) => c.id === userId) || currentUser;
+
+  const otherUsers = creators.filter((c) => c.id !== targetUser.id);
+
+  const followingList =
+    targetUser.id === currentUser.id
+      ? otherUsers.filter((c) => followedUserIds.has(c.id))
+      : otherUsers.filter((c) => (targetUser.followingIds || []).includes(c.id));
+
+  const followersList = otherUsers.filter((c) => {
+    if (Array.isArray(targetUser.followerIds) && targetUser.followerIds.length > 0) {
+      return targetUser.followerIds.includes(c.id);
+    }
+    if (Array.isArray(c.followingIds) && c.followingIds.includes(targetUser.id)) {
+      return true;
+    }
+    return followedUserIds.has(c.id);
+  });
 
   const currentDisplayList = (
     activeTab === 'following' ? followingList : followersList
@@ -101,26 +122,28 @@ export const FollowListScreen: React.FC<FollowListScreenProps> = ({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* 1. Header */}
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: theme.surface, borderBottomColor: theme.border },
-        ]}
-      >
-        <TouchableOpacity onPress={goBack} style={styles.iconBtn} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={theme.text} />
-        </TouchableOpacity>
+      {/* 1. Header (Chỉ hiển thị nút Back khi mở dạng màn hình con) */}
+      {!isTabMode && (
+        <View
+          style={[
+            styles.header,
+            { backgroundColor: theme.surface, borderBottomColor: theme.border },
+          ]}
+        >
+          <TouchableOpacity onPress={goBack} style={styles.iconBtn} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
+          </TouchableOpacity>
 
-        <View style={styles.headerTitleRow}>
-          <Image source={{ uri: currentUser.avatarUrl }} style={styles.headerAvatar} />
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            Kết nối Cộng đồng
-          </Text>
+          <View style={styles.headerTitleRow}>
+            <Image source={{ uri: targetUser.avatarUrl }} style={styles.headerAvatar} />
+            <Text style={[styles.headerTitle, { color: theme.text }]}>
+              @{targetUser.username || targetUser.displayName}
+            </Text>
+          </View>
+
+          <View style={{ width: 32 }} />
         </View>
-
-        <View style={{ width: 32 }} />
-      </View>
+      )}
 
       {/* Thanh tìm kiếm bạn bè */}
       <View style={[styles.searchWrap, { backgroundColor: theme.surface }]}>

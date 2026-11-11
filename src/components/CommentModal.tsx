@@ -26,12 +26,21 @@ interface CommentModalProps {
 
 export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, onClose }) => {
   const { theme } = useTheme();
-  const { comments, addComment, toggleLikeComment, currentUser, isLoggedIn, navigateTo } =
-    useApp();
+  const {
+    videos,
+    comments,
+    addComment,
+    toggleLikeComment,
+    currentUser,
+    isLoggedIn,
+    navigateTo,
+  } = useApp();
   const [inputText, setInputText] = useState('');
   const [rating, setRating] = useState<number>(5);
   const [submitting, setSubmitting] = useState(false);
 
+  const currentVideo = videos.find((v) => v.id === videoId);
+  const isCommentsAllowed = currentVideo?.commentsEnabled !== false;
   const videoComments = comments.filter((c) => c.videoId === videoId);
 
   const avgRating =
@@ -57,12 +66,28 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
 
     return (
       <View style={[styles.commentRow, { borderBottomColor: theme.divider }]}>
-        <Image source={{ uri: item.user.avatarUrl }} style={styles.commentAvatar} />
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => {
+            onClose();
+            navigateTo({ name: 'creator_profile', userId: item.user.id });
+          }}
+        >
+          <Image source={{ uri: item.user.avatarUrl }} style={styles.commentAvatar} />
+        </TouchableOpacity>
         <View style={styles.commentContent}>
           <View style={styles.commentHeaderRow}>
-            <Text style={[styles.userName, { color: theme.text }]}>
-              {item.user.displayName || item.user.username}
-            </Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                onClose();
+                navigateTo({ name: 'creator_profile', userId: item.user.id });
+              }}
+            >
+              <Text style={[styles.userName, { color: theme.text }]}>
+                {item.user.displayName || item.user.username}
+              </Text>
+            </TouchableOpacity>
             <RatingStars value={item.rating || 5} size={12} />
           </View>
           <Text style={[styles.commentText, { color: theme.textSecondary }]}>
@@ -150,7 +175,24 @@ export const CommentModal: React.FC<CommentModalProps> = ({ visible, videoId, on
           />
 
           {/* Form gửi bình luận + chọn số sao (BT8.5) */}
-          {isLoggedIn ? (
+          {!isCommentsAllowed ? (
+            <View
+              style={[
+                styles.loginPromptBar,
+                { backgroundColor: theme.surfaceVariant, borderTopColor: theme.border },
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={18}
+                color={theme.textMuted}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={[styles.loginPromptText, { color: theme.textSecondary }]}>
+                Tác giả đã tắt tính năng bình luận cho video này.
+              </Text>
+            </View>
+          ) : isLoggedIn ? (
             <View
               style={[
                 styles.inputWrapper,

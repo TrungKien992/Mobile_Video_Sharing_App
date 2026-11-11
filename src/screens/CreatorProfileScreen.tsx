@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { VideoItem } from '../types';
 import { HeartButton } from '../components/HeartButton';
+import { EmptyState } from '../components/EmptyState';
 import { formatNumber } from '../utils/format';
 import { showMessage } from '../utils/dialog';
 
@@ -34,10 +35,10 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
   const creatorVideos = videos.filter((v) => v.creator.id === creator.id);
   const displayVideos =
     activeTab === 'videos'
-      ? creatorVideos.length > 0
-        ? creatorVideos
-        : videos.slice(0, 4)
-      : videos.slice(0, 3);
+      ? creatorVideos
+      : [...creatorVideos].sort(
+          (a, b) => b.likes * 10 + b.views - (a.likes * 10 + a.views)
+        );
 
   const renderVideoGridItem = ({ item }: { item: VideoItem }) => (
     <TouchableOpacity
@@ -95,22 +96,40 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
             </Text>
 
             <View style={styles.statsRow}>
-              <View style={styles.statCol}>
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() =>
+                  navigateTo({
+                    name: 'follow_list',
+                    userId: creator.id,
+                    initialTab: 'following',
+                  })
+                }
+              >
                 <Text style={[styles.statNum, { color: theme.text }]}>
                   {formatNumber(creator.following ?? creator.followingCount)}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textMuted }]}>
                   Đang theo dõi
                 </Text>
-              </View>
-              <View style={styles.statCol}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() =>
+                  navigateTo({
+                    name: 'follow_list',
+                    userId: creator.id,
+                    initialTab: 'followers',
+                  })
+                }
+              >
                 <Text style={[styles.statNum, { color: theme.text }]}>
                   {formatNumber(creator.followers ?? creator.followersCount)}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textMuted }]}>
                   Người theo dõi
                 </Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statCol}>
                 <Text style={[styles.statNum, { color: theme.text }]}>
                   {formatNumber(creator.likes ?? creator.likesCount)}
@@ -210,6 +229,13 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
               </TouchableOpacity>
             </View>
           </View>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="video"
+            title="Chưa có video nào"
+            description={`@${creator.username} chưa đăng tải video nào lên kênh.`}
+          />
         }
       />
     </View>
