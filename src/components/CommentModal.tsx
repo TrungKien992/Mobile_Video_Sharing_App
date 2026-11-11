@@ -282,6 +282,9 @@ const styles = StyleSheet.create({
   },
   sheetContainer: {
     height: '72%',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',

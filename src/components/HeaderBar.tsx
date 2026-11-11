@@ -19,7 +19,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   rightActions,
 }) => {
   const { theme, isDarkMode, toggleTheme } = useTheme();
-  const { unreadNotificationCount, navigateTo, isLoggedIn, currentUser, setTab } = useApp();
+  const {
+    unreadNotificationCount,
+    navigateTo,
+    isLoggedIn,
+    currentUser,
+    currentTab,
+    setTab,
+  } = useApp();
 
   return (
     <View
@@ -59,14 +66,16 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           rightActions
         ) : (
           <View style={styles.defaultRightRow}>
-            {/* Nút Tìm kiếm nhanh */}
-            <TouchableOpacity
-              onPress={() => setTab('search')}
-              style={[styles.iconBtn, { backgroundColor: theme.surfaceVariant }]}
-              activeOpacity={0.7}
-            >
-              <Feather name="search" size={18} color={theme.text} />
-            </TouchableOpacity>
+            {/* Nút Tìm kiếm nhanh (Ẩn khi đang đứng ở tab Tìm kiếm) */}
+            {currentTab !== 'search' && (
+              <TouchableOpacity
+                onPress={() => setTab('search')}
+                style={[styles.iconBtn, { backgroundColor: theme.surfaceVariant }]}
+                activeOpacity={0.7}
+              >
+                <Feather name="search" size={18} color={theme.text} />
+              </TouchableOpacity>
+            )}
 
             {/* Đổi giao diện Sáng / Tối */}
             <TouchableOpacity

@@ -16,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { INITIAL_MUSICS } from '../data/initialMusics';
 import { VideoItem, MusicItem, UserProfile } from '../types';
 import { HeartButton } from '../components/HeartButton';
+import { EmptyState } from '../components/EmptyState';
 import { formatNumber } from '../utils/format';
 
 const CATEGORY_ALIASES: Record<string, string[]> = {
@@ -266,76 +267,86 @@ export const HomeScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.videoGrid}>
-        {filteredVideos.map((video) => (
-          <TouchableOpacity
-            key={video.id}
-            style={[
-              styles.videoCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-            activeOpacity={0.88}
-            onPress={() => handleOpenVideo(video)}
-          >
-            <View style={styles.cardThumbWrap}>
-              <Image
-                source={{ uri: video.thumbnailUrl }}
-                style={styles.cardThumb}
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(9,13,22,0.75)']}
-                style={styles.cardThumbScrim}
-              />
-              {/* Nút HeartButton đồng bộ MongoDB + AsyncStorage */}
-              <View style={styles.cardHeartPos}>
-                <HeartButton videoId={video.id} size={17} />
-              </View>
-
-              {/* Thời lượng video */}
-              <View style={styles.durationBadge}>
-                <Ionicons name="play" size={10} color="#FFFFFF" />
-                <Text style={styles.durationText}>{video.duration || '00:15'}</Text>
-              </View>
-
-              {/* Lượt xem & lượt thích */}
-              <View style={styles.cardStatsBottom}>
-                <Text style={styles.cardStatText}>
-                  👁 {formatNumber(video.views)}
-                </Text>
-                <Text style={styles.cardStatText}>
-                  ♥ {formatNumber(video.likes)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.cardBody}>
-              <Text
-                style={[styles.cardTitle, { color: theme.text }]}
-                numberOfLines={2}
-              >
-                {video.title}
-              </Text>
-              <TouchableOpacity
-                style={styles.cardCreatorRow}
-                onPress={() =>
-                  navigateTo({ name: 'creator_profile', userId: video.creator.id })
-                }
-              >
+      {filteredVideos.length === 0 ? (
+        <EmptyState
+          icon="film"
+          title={`Chưa có video mục "${selectedCategory}"`}
+          description="Danh mục này hiện chưa có video nào. Hãy khám phá tất cả video hoặc đăng tải video mới!"
+          actionLabel="Xem tất cả video"
+          onAction={() => setSelectedCategory('Tất cả')}
+        />
+      ) : (
+        <View style={styles.videoGrid}>
+          {filteredVideos.map((video) => (
+            <TouchableOpacity
+              key={video.id}
+              style={[
+                styles.videoCard,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+              activeOpacity={0.88}
+              onPress={() => handleOpenVideo(video)}
+            >
+              <View style={styles.cardThumbWrap}>
                 <Image
-                  source={{ uri: video.creator.avatarUrl }}
-                  style={styles.cardCreatorAvatar}
+                  source={{ uri: video.thumbnailUrl }}
+                  style={styles.cardThumb}
                 />
+                <LinearGradient
+                  colors={['transparent', 'rgba(9,13,22,0.75)']}
+                  style={styles.cardThumbScrim}
+                />
+                {/* Nút HeartButton đồng bộ MongoDB + AsyncStorage */}
+                <View style={styles.cardHeartPos}>
+                  <HeartButton videoId={video.id} size={17} />
+                </View>
+
+                {/* Thời lượng video */}
+                <View style={styles.durationBadge}>
+                  <Ionicons name="play" size={10} color="#FFFFFF" />
+                  <Text style={styles.durationText}>{video.duration || '00:15'}</Text>
+                </View>
+
+                {/* Lượt xem & lượt thích */}
+                <View style={styles.cardStatsBottom}>
+                  <Text style={styles.cardStatText}>
+                    👁 {formatNumber(video.views)}
+                  </Text>
+                  <Text style={styles.cardStatText}>
+                    ♥ {formatNumber(video.likes)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.cardBody}>
                 <Text
-                  style={[styles.cardCreatorName, { color: theme.textSecondary }]}
-                  numberOfLines={1}
+                  style={[styles.cardTitle, { color: theme.text }]}
+                  numberOfLines={2}
                 >
-                  {video.creator.displayName}
+                  {video.title}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+                <TouchableOpacity
+                  style={styles.cardCreatorRow}
+                  onPress={() =>
+                    navigateTo({ name: 'creator_profile', userId: video.creator.id })
+                  }
+                >
+                  <Image
+                    source={{ uri: video.creator.avatarUrl }}
+                    style={styles.cardCreatorAvatar}
+                  />
+                  <Text
+                    style={[styles.cardCreatorName, { color: theme.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {video.creator.displayName}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* 5. Phòng Phát Trực Tiếp (Live Stream) */}
       <View style={styles.sectionHeader}>

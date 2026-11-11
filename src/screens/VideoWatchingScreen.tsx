@@ -8,6 +8,8 @@ import {
   Platform,
   Share,
   PanResponder,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,9 +49,34 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   });
 
   const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   const viewedIdsRef = useRef<Set<string>>(new Set());
+  const discSpinAnim = useRef(new Animated.Value(0)).current;
 
   const currentVideo = videos[currentIndex] || videos[0];
+
+  useEffect(() => {
+    setDescExpanded(false);
+  }, [currentIndex]);
+
+  useEffect(() => {
+    discSpinAnim.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(discSpinAnim, {
+        toValue: 1,
+        duration: 5500,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [discSpinAnim, currentVideo?.id]);
+
+  const discRotate = discSpinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   // Tự động tăng lượt xem thực tế trên MongoDB khi mở xem video
   useEffect(() => {
@@ -301,6 +328,35 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           />
           {isOwnVideo && <Text style={styles.actionLabel}>Xóa</Text>}
         </TouchableOpacity>
+
+        {/* Đĩa nhạc Vinyl xoay liên tục chuẩn TikTok/Reels */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            if (currentVideo.music?.id) {
+              openCreateWithMusic(currentVideo.music.id);
+              showToast(`Đã chọn nhạc: ${currentVideo.music.title} 🎵`, 'info');
+            }
+          }}
+          style={styles.vinylDiscTouch}
+        >
+          <Animated.View
+            style={[
+              styles.vinylDiscOuter,
+              { transform: [{ rotate: discRotate }] },
+            ]}
+          >
+            <Image
+              source={{
+                uri:
+                  currentVideo.music?.coverUrl ||
+                  currentVideo.creator.avatarUrl,
+              }}
+              style={styles.vinylDiscCover}
+            />
+            <View style={styles.vinylCenterHole} />
+          </Animated.View>
+        </TouchableOpacity>
       </View>
 
       {/* 4. Thông tin video ở góc dưới */}
@@ -340,9 +396,22 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           {currentVideo.title}
         </Text>
 
-        <Text style={styles.videoDescription} numberOfLines={2}>
-          {currentVideo.description}
-        </Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setDescExpanded((prev) => !prev)}
+        >
+          <Text
+            style={styles.videoDescription}
+            numberOfLines={descExpanded ? 8 : 2}
+          >
+            {currentVideo.description}
+          </Text>
+          {(currentVideo.description || '').length > 65 && (
+            <Text style={styles.readMoreText}>
+              {descExpanded ? 'Thu gọn ▲' : 'Xem thêm ▼'}
+            </Text>
+          )}
+        </TouchableOpacity>
 
         {/* Danh sách Hashtags có thể bấm vào để tìm kiếm theo hashtag */}
         <View style={styles.hashtagsRow}>
@@ -480,6 +549,38 @@ const styles = StyleSheet.create({
   actionBtn: {
     alignItems: 'center',
   },
+  vinylDiscTouch: {
+    marginTop: 4,
+  },
+  vinylDiscOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1E293B',
+    borderWidth: 7,
+    borderColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  vinylDiscCover: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 15,
+  },
+  vinylCenterHole: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
   actionLabel: {
     color: '#FFFFFF',
     fontSize: 11,
@@ -527,6 +628,12 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     fontSize: 12,
     lineHeight: 17,
+    marginBottom: 4,
+  },
+  readMoreText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
     marginBottom: 6,
   },
   hashtagsRow: {

@@ -26,6 +26,7 @@ interface VideoPlayerProps {
   showControls?: boolean;
   onPress?: () => void;
   onDoubleTap?: () => void;
+  onDurationDetected?: (formatted: string) => void;
 }
 
 function formatSeconds(sec: number): string {
@@ -47,6 +48,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   showControls = true,
   onPress,
   onDoubleTap,
+  onDurationDetected,
 }) => {
   const resolvedVideoUrl = resolveMediaUrl(videoUrl);
   const resolvedThumbnailUrl = thumbnailUrl ? resolveMediaUrl(thumbnailUrl) : undefined;
@@ -63,6 +65,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [durationSec, setDurationSec] = useState(0);
   const [barWidth, setBarWidth] = useState(300);
+  const [isScrubbing, setIsScrubbing] = useState(false);
   const [showBurstHeart, setShowBurstHeart] = useState(false);
 
   const player = useVideoPlayer(
@@ -130,6 +133,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setCurrentTimeSec(currentTime || 0);
       if (duration && duration > 0) {
         setDurationSec(duration);
+        onDurationDetected?.(formatSeconds(duration));
         const prog = Math.min(1, Math.max(0, currentTime / duration));
         setProgress(prog);
 
@@ -310,6 +314,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               const target = e.currentTarget as HTMLVideoElement;
               if (target && target.duration > 0 && isFinite(target.duration)) {
                 setDurationSec(target.duration);
+                onDurationDetected?.(formatSeconds(target.duration));
               }
             }}
             onTimeUpdate={(e: any) => {
@@ -381,7 +386,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* Hiển thị thời gian & Thanh tiến trình có thể chạm để Tua (Seekable Progress Bar) */}
+        {/* Hiển thị thời gian & Thanh tiến trình có thể chạm hoặc kéo trượt để Tua (Seekable & Scrubbable Progress Bar) */}
         {showControls ? (
           <View style={styles.seekSection}>
             {durationSec > 0 && (
@@ -391,22 +396,38 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              activeOpacity={1}
+            <View
               onLayout={handleProgressBarLayout}
-              onPress={handleProgressBarPress}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={(e) => {
+                setIsScrubbing(true);
+                handleProgressBarPress(e);
+              }}
+              onResponderMove={handleProgressBarPress}
+              onResponderRelease={(e) => {
+                handleProgressBarPress(e);
+                setIsScrubbing(false);
+              }}
+              onResponderTerminate={() => setIsScrubbing(false)}
               style={styles.seekBarHitArea}
             >
-              <View style={styles.progressBarTrack}>
+              <View
+                style={[
+                  styles.progressBarTrack,
+                  isScrubbing && { height: 8 },
+                ]}
+              >
                 <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
                 <View
                   style={[
                     styles.progressThumb,
+                    isScrubbing && { width: 16, height: 16, borderRadius: 8, top: -4, marginLeft: -8 },
                     { left: `${Math.min(98, Math.max(0, progress * 100))}%` },
                   ]}
                 />
               </View>
-            </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={styles.progressBarBackground}>
@@ -499,7 +520,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </TouchableOpacity>
       )}
 
-      {/* Thanh tiến trình có thể chạm để Tua */}
+      {/* Thanh tiến trình có thể chạm hoặc kéo trượt để Tua */}
       {showControls ? (
         <View style={styles.seekSection}>
           {durationSec > 0 && (
@@ -509,22 +530,38 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </Text>
             </View>
           )}
-          <TouchableOpacity
-            activeOpacity={1}
+          <View
             onLayout={handleProgressBarLayout}
-            onPress={handleProgressBarPress}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+            onResponderGrant={(e) => {
+              setIsScrubbing(true);
+              handleProgressBarPress(e);
+            }}
+            onResponderMove={handleProgressBarPress}
+            onResponderRelease={(e) => {
+              handleProgressBarPress(e);
+              setIsScrubbing(false);
+            }}
+            onResponderTerminate={() => setIsScrubbing(false)}
             style={styles.seekBarHitArea}
           >
-            <View style={styles.progressBarTrack}>
+            <View
+              style={[
+                styles.progressBarTrack,
+                isScrubbing && { height: 8 },
+              ]}
+            >
               <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
               <View
                 style={[
                   styles.progressThumb,
+                  isScrubbing && { width: 16, height: 16, borderRadius: 8, top: -4, marginLeft: -8 },
                   { left: `${Math.min(98, Math.max(0, progress * 100))}%` },
                 ]}
               />
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <View style={styles.progressBarBackground}>

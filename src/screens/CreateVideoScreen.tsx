@@ -35,6 +35,7 @@ export const CreateVideoScreen: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<FilterItem>(INITIAL_FILTERS[0]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordTimer, setRecordTimer] = useState(0);
+  const [maxRecordDuration, setMaxRecordDuration] = useState<5 | 15 | 60>(15);
   const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
   const [flashOn, setFlashOn] = useState(false);
   const [timerSetting, setTimerSetting] = useState<number | null>(null);
@@ -126,11 +127,11 @@ export const CreateVideoScreen: React.FC = () => {
     setRecordTimer(0);
     recordIntervalRef.current = setInterval(() => {
       setRecordTimer((t) => {
-        if (t >= 5) {
+        if (t >= maxRecordDuration) {
           if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
           setIsRecording(false);
           goToPostScreen(currentSample.videoUrl);
-          return 5;
+          return maxRecordDuration;
         }
         return t + 1;
       });
@@ -326,13 +327,55 @@ export const CreateVideoScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Thanh tiến trình thời gian ghi hình trên đỉnh màn hình */}
+      {isRecording && (
+        <View style={styles.recordingTopProgressTrack}>
+          <View
+            style={[
+              styles.recordingTopProgressFill,
+              { width: `${Math.min(100, (recordTimer / maxRecordDuration) * 100)}%` },
+            ]}
+          />
+        </View>
+      )}
+
       {/* Thời gian đang quay */}
       {isRecording && (
         <View style={styles.recordingTimerBadge}>
           <View style={styles.redPulseDot} />
           <Text style={styles.timerText}>
-            Đang ghi hình 00:0{recordTimer} / 00:05
+            Đang ghi hình 00:{recordTimer < 10 ? `0${recordTimer}` : recordTimer} / 00:
+            {maxRecordDuration < 10 ? `0${maxRecordDuration}` : maxRecordDuration}
           </Text>
+        </View>
+      )}
+
+      {/* Tùy chọn thời lượng quay (5s / 15s / 60s) */}
+      {!isRecording && (
+        <View style={styles.durationSelectorRow}>
+          {([5, 15, 60] as const).map((sec) => {
+            const active = maxRecordDuration === sec;
+            return (
+              <TouchableOpacity
+                key={sec}
+                style={[
+                  styles.durationOptionChip,
+                  active && styles.durationOptionChipActive,
+                ]}
+                onPress={() => setMaxRecordDuration(sec)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.durationOptionText,
+                    active && styles.durationOptionTextActive,
+                  ]}
+                >
+                  {sec}s
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
@@ -526,6 +569,19 @@ const styles = StyleSheet.create({
     marginTop: 3,
     textAlign: 'center',
   },
+  recordingTopProgressTrack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    zIndex: 40,
+  },
+  recordingTopProgressFill: {
+    height: '100%',
+    backgroundColor: '#FF3366',
+  },
   recordingTimerBadge: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 95 : 72,
@@ -537,6 +593,35 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     zIndex: 25,
+  },
+  durationSelectorRow: {
+    position: 'absolute',
+    bottom: 118,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 18,
+    padding: 3,
+    gap: 4,
+    zIndex: 20,
+  },
+  durationOptionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 14,
+  },
+  durationOptionChipActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  durationOptionText: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  durationOptionTextActive: {
+    color: '#0F172A',
+    fontWeight: '900',
   },
   redPulseDot: {
     width: 8,

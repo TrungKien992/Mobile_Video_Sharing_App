@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const THEME_STORAGE_KEY = '@vclip_dark_mode_v1';
 
 export interface ThemeColors {
   primary: string;
@@ -87,8 +90,22 @@ const ThemeContext = createContext<ThemeContextType>({
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_STORAGE_KEY)
+      .then((val) => {
+        if (val === 'true') {
+          setIsDarkMode(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem(THEME_STORAGE_KEY, String(next)).catch(() => {});
+      return next;
+    });
   };
 
   const theme = isDarkMode ? DARK_THEME : LIGHT_THEME;

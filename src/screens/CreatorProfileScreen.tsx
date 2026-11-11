@@ -20,14 +20,20 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
   const {
     videos,
     creators,
+    currentUser,
     followedUserIds,
     toggleFollowUser,
     goBack,
     navigateTo,
+    setTab,
   } = useApp();
   const { theme } = useTheme();
 
-  const creator = creators.find((c) => c.id === userId) || creators[0];
+  const creator =
+    userId === currentUser.id
+      ? currentUser
+      : creators.find((c) => c.id === userId) || creators[0];
+  const isOwnProfile = creator.id === currentUser.id;
   const isFollowed = followedUserIds.has(creator.id);
 
   const [activeTab, setActiveTab] = useState<'videos' | 'liked'>('videos');
@@ -140,44 +146,69 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
               </View>
             </View>
 
-            {/* Nút Follow (lưu vào MongoDB, không reset khi F5) & Nhắn tin */}
+            {/* Nút hành động: Nếu là kênh của mình -> Chỉnh sửa hồ sơ; nếu kênh người khác -> Follow & Nhắn tin */}
             <View style={styles.actionButtonsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.followBtn,
-                  {
-                    backgroundColor: isFollowed
-                      ? theme.surfaceVariant
-                      : theme.primary,
-                  },
-                ]}
-                onPress={() => toggleFollowUser(creator.id)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.followBtnText,
-                    { color: isFollowed ? theme.text : '#FFFFFF' },
-                  ]}
-                >
-                  {isFollowed ? '✓ Đang theo dõi' : '+ Theo dõi kênh'}
-                </Text>
-              </TouchableOpacity>
+              {isOwnProfile ? (
+                <>
+                  <TouchableOpacity
+                    style={[styles.followBtn, { backgroundColor: theme.primary }]}
+                    onPress={() => navigateTo({ name: 'edit_profile' })}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.followBtnText, { color: '#FFFFFF' }]}>
+                      Chỉnh sửa hồ sơ
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.messageBtn, { backgroundColor: theme.surfaceVariant }]}
+                    onPress={() => setTab('profile')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.messageBtnText, { color: theme.text }]}>
+                      Kênh của tôi
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[
+                      styles.followBtn,
+                      {
+                        backgroundColor: isFollowed
+                          ? theme.surfaceVariant
+                          : theme.primary,
+                      },
+                    ]}
+                    onPress={() => toggleFollowUser(creator.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.followBtnText,
+                        { color: isFollowed ? theme.text : '#FFFFFF' },
+                      ]}
+                    >
+                      {isFollowed ? '✓ Đang theo dõi' : '+ Theo dõi kênh'}
+                    </Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.messageBtn, { backgroundColor: theme.surfaceVariant }]}
-                onPress={() =>
-                  showMessage(
-                    'Trò chuyện',
-                    `Đã mở hộp thoại tin nhắn với ${creator.displayName}`
-                  )
-                }
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.messageBtnText, { color: theme.text }]}>
-                  Nhắn tin
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.messageBtn, { backgroundColor: theme.surfaceVariant }]}
+                    onPress={() =>
+                      showMessage(
+                        'Trò chuyện',
+                        `Đã mở hộp thoại tin nhắn với ${creator.displayName}`
+                      )
+                    }
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.messageBtnText, { color: theme.text }]}>
+                      Nhắn tin
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             {/* Tabs */}
@@ -365,6 +396,7 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     flex: 1 / 3,
+    maxWidth: '32.8%',
     aspectRatio: 0.78,
     position: 'relative',
     backgroundColor: '#0F172A',

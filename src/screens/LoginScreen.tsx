@@ -107,7 +107,16 @@ export const LoginScreen: React.FC = () => {
           ]}
         >
           {serverError && (
-            <View style={[styles.errorBanner, { backgroundColor: '#FEE2E2' }]}>
+            <View
+              style={[
+                styles.errorBanner,
+                {
+                  backgroundColor: theme.isDark
+                    ? 'rgba(239, 68, 68, 0.16)'
+                    : '#FEE2E2',
+                },
+              ]}
+            >
               <Ionicons name="alert-circle" size={18} color={theme.danger} />
               <Text style={[styles.errorBannerText, { color: theme.danger }]}>
                 {serverError}

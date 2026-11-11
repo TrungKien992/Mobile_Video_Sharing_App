@@ -44,6 +44,3 @@ npx expo start
 
 ## 📂 Tài Liệu Bàn Giao Trong Dự Án
 - [BAO_CAO_DU_AN_SDLC.md](./BAO_CAO_DU_AN_SDLC.md): Báo cáo tài liệu quy trình phát triển phần mềm SDLC đầy đủ 6 giai đoạn (SRS, SDS, UML, Testing, Deployment, Maintenance).
-- [SLIDE_THUYET_TRINH.html](./SLIDE_THUYET_TRINH.html) & [SLIDE_THUYET_TRINH.md](./SLIDE_THUYET_TRINH.md): Bộ Slide thuyết trình nhóm.
-- [KICH_BAN_VIDEO_DEMO.md](./KICH_BAN_VIDEO_DEMO.md): Kịch bản quay video demo 1-3 phút.
-- [HUONG_DAN_CHAY_SOURCE.md](./HUONG_DAN_CHAY_SOURCE.md): Hướng dẫn cài đặt và kiểm thử chi tiết.

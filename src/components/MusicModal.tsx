@@ -333,6 +333,9 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     height: 500,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',

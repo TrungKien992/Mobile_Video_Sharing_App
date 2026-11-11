@@ -161,6 +161,11 @@ export const FollowListScreen: React.FC<FollowListScreenProps> = ({
             value={filterQuery}
             onChangeText={setFilterQuery}
           />
+          {filterQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setFilterQuery('')} style={{ padding: 4 }}>
+              <Ionicons name="close-circle" size={17} color={theme.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

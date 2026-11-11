@@ -77,6 +77,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   const [hashtags, setHashtags] = useState<string[]>(['vclip', 'xuhuong', 'videohd']);
   const [newTagInput, setNewTagInput] = useState('');
   const [commentsEnabled, setCommentsEnabled] = useState(true);
+  const [videoDuration, setVideoDuration] = useState<string>('00:18');
   const [publishing, setPublishing] = useState(false);
   const [uploadingLocal, setUploadingLocal] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -256,7 +257,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
         filter: selectedFilter.id,
         music: selectedMusic,
         commentsEnabled,
-        duration: '00:18',
+        duration: videoDuration || '00:18',
       });
 
       showMessage(
@@ -372,9 +373,16 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
                   isLooping={true}
                   showControls={false}
                   filterOverlayColor={selectedFilter.overlayColor}
+                  onDurationDetected={(formatted) => {
+                    if (formatted && formatted !== '00:00') {
+                      setVideoDuration(formatted);
+                    }
+                  }}
                 />
                 <View style={styles.realBadge}>
-                  <Text style={styles.realBadgeText}>LIVE PREVIEW</Text>
+                  <Text style={styles.realBadgeText}>
+                    LIVE • {videoDuration}
+                  </Text>
                 </View>
               </View>
 

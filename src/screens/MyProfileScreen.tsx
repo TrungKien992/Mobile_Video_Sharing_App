@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { VideoItem } from '../types';
+import { StorageService } from '../services/storageService';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { EmptyState } from '../components/EmptyState';
 import { HeartButton } from '../components/HeartButton';
@@ -30,12 +31,20 @@ export const MyProfileScreen: React.FC = () => {
     bookmarkedVideoIds,
     followedUserIds,
     unreadNotificationCount,
+    deleteVideo,
     navigateTo,
     setTab,
   } = useApp();
   const { theme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('videos');
+  const [draftCount, setDraftCount] = useState<number>(0);
+
+  useEffect(() => {
+    StorageService.getDrafts()
+      .then((drafts) => setDraftCount(drafts.length))
+      .catch(() => {});
+  }, [videos.length]);
 
   // Nếu chưa đăng nhập -> Hiển thị màn hình mời Đăng nhập / Đăng ký (BT8.3)
   if (!isLoggedIn) {
@@ -99,6 +108,16 @@ export const MyProfileScreen: React.FC = () => {
     }
   };
 
+  const handleDeleteOwnVideo = async (video: VideoItem) => {
+    const ok = await confirmDialog(
+      'Xóa video đã đăng?',
+      `Bạn có chắc chắn muốn xóa video "${video.title}" khỏi kênh của bạn không?`
+    );
+    if (ok) {
+      await deleteVideo(video.id);
+    }
+  };
+
   const renderVideoGridItem = ({ item }: { item: VideoItem }) => (
     <TouchableOpacity
       style={[styles.gridCard, { borderColor: theme.border }]}
@@ -109,6 +128,18 @@ export const MyProfileScreen: React.FC = () => {
       <View style={styles.cardTopHeart}>
         <HeartButton videoId={item.id} size={14} />
       </View>
+      {activeTab === 'videos' && item.creator.id === currentUser.id && (
+        <TouchableOpacity
+          style={styles.deleteCardBtn}
+          onPress={(e) => {
+            e.stopPropagation?.();
+            handleDeleteOwnVideo(item);
+          }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="trash-outline" size={13} color="#FCA5A5" />
+        </TouchableOpacity>
+      )}
       <View style={styles.viewsOverlay}>
         <Ionicons name="play" size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
         <Text style={styles.viewsOverlayText}>{formatNumber(item.views)}</Text>
@@ -252,10 +283,36 @@ export const MyProfileScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
 
+                {draftCount > 0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.secondaryActionBtn,
+                      {
+                        backgroundColor: theme.primaryLight,
+                        borderColor: theme.primary,
+                      },
+                    ]}
+                    onPress={() => navigateTo({ name: 'create_post' })}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="folder" size={14} color={theme.primary} />
+                    <Text style={[styles.secondaryActionText, { color: theme.primary }]}>
+                      Bản nháp ({draftCount})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
                   style={[
                     styles.logoutBtn,
-                    { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+                    {
+                      backgroundColor: theme.isDark
+                        ? 'rgba(239, 68, 68, 0.16)'
+                        : '#FEE2E2',
+                      borderColor: theme.isDark
+                        ? 'rgba(239, 68, 68, 0.35)'
+                        : '#FECACA',
+                    },
                   ]}
                   onPress={handleLogout}
                   activeOpacity={0.85}
@@ -554,6 +611,7 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     flex: 1 / 3,
+    maxWidth: '32.8%',
     aspectRatio: 0.78,
     position: 'relative',
     backgroundColor: '#0F172A',
@@ -566,6 +624,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
+    zIndex: 5,
+  },
+  deleteCardBtn: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 5,
   },
   viewsOverlay: {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   FlatList,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -26,6 +27,14 @@ export const NotificationsScreen: React.FC = () => {
     refreshVideos,
   } = useApp();
   const [refreshing, setRefreshing] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'unread' | 'interact' | 'follow'>('all');
+
+  const filteredNotifications = notifications.filter((n) => {
+    if (filterType === 'unread') return !n.read;
+    if (filterType === 'interact') return n.type === 'like' || n.type === 'comment';
+    if (filterType === 'follow') return n.type === 'follow';
+    return true;
+  });
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -87,8 +96,53 @@ export const NotificationsScreen: React.FC = () => {
         )}
       </View>
 
+      {/* Bộ lọc nhanh loại thông báo */}
+      <View
+        style={[
+          styles.filterBar,
+          { backgroundColor: theme.surface, borderBottomColor: theme.border },
+        ]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {[
+            { key: 'all', label: `Tất cả (${notifications.length})` },
+            { key: 'unread', label: `Chưa đọc (${unreadNotificationCount})` },
+            { key: 'interact', label: '❤️ Thích & Bình luận' },
+            { key: 'follow', label: '👤 Người theo dõi' },
+          ].map((item) => {
+            const active = filterType === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? theme.primary : theme.surfaceVariant,
+                  },
+                ]}
+                onPress={() => setFilterType(item.key as any)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: active ? '#FFFFFF' : theme.textSecondary },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       <FlatList
-        data={notifications}
+        data={filteredNotifications}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -147,6 +201,23 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   readAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterBar: {
+    borderBottomWidth: 1,
+  },
+  filterScrollContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  filterChipText: {
     fontSize: 12,
     fontWeight: '700',
   },

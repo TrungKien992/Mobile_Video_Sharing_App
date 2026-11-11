@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -246,42 +247,48 @@ export const SearchScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* 2. Tabs phân loại */}
+      {/* 2. Tabs phân loại (Cuộn ngang mượt trên mọi kích thước màn hình) */}
       <View
         style={[
-          styles.tabsRow,
+          styles.tabsBarWrapper,
           { backgroundColor: theme.surface, borderBottomColor: theme.border },
         ]}
       >
-        {[
-          { key: 'all', label: `Tất cả (${filteredVideos.length})` },
-          { key: 'trending', label: '🔥 Thịnh hành' },
-          { key: 'accounts', label: `👤 Tác giả (${filteredCreators.length})` },
-          { key: 'liked', label: `❤️ Đã thích (${likedVideoIds.size})` },
-        ].map((tab) => {
-          const isSelected = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.tabChip,
-                {
-                  backgroundColor: isSelected ? theme.primary : theme.surfaceVariant,
-                },
-              ]}
-              onPress={() => setActiveTab(tab.key as SearchCategoryTab)}
-            >
-              <Text
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+        >
+          {[
+            { key: 'all', label: `Tất cả (${filteredVideos.length})` },
+            { key: 'trending', label: '🔥 Thịnh hành' },
+            { key: 'accounts', label: `👤 Tác giả (${filteredCreators.length})` },
+            { key: 'liked', label: `❤️ Đã thích (${likedVideoIds.size})` },
+          ].map((tab) => {
+            const isSelected = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
                 style={[
-                  styles.tabChipText,
-                  { color: isSelected ? '#FFFFFF' : theme.textSecondary },
+                  styles.tabChip,
+                  {
+                    backgroundColor: isSelected ? theme.primary : theme.surfaceVariant,
+                  },
                 ]}
+                onPress={() => setActiveTab(tab.key as SearchCategoryTab)}
               >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                <Text
+                  style={[
+                    styles.tabChipText,
+                    { color: isSelected ? '#FFFFFF' : theme.textSecondary },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* 3. Kết quả hiển thị */}
@@ -370,12 +377,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  tabsBarWrapper: {
+    borderBottomWidth: 1,
+  },
   tabsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 8,
-    borderBottomWidth: 1,
   },
   tabChip: {
     paddingHorizontal: 12,
