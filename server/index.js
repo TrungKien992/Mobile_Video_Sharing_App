@@ -6,10 +6,39 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
+// Tự động đọc biến môi trường từ file .env (không cần cài thêm thư viện ngoài)
+function loadEnvFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const content = fs.readFileSync(filePath, 'utf8');
+    content.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx > 0) {
+        const key = trimmed.slice(0, eqIdx).trim();
+        const val = trimmed
+          .slice(eqIdx + 1)
+          .trim()
+          .replace(/^['"]|['"]$/g, '');
+        if (key && !process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    });
+  } catch {}
+}
+
+loadEnvFile(path.join(__dirname, '..', '.env'));
+loadEnvFile(path.join(__dirname, '.env'));
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/video_sharing_db';
 const AUTH_SECRET = process.env.AUTH_SECRET || 'vclip_hmac_secret_key_2026';
+let runtimeGeminiApiKey =
+  process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
+const DEFAULT_GEMINI_MODEL = process.env.AI_MODEL || 'gemini-3.8-flash';
 
 // ============================================================================
 // 0. BẢO MẬT: MÃ HÓA MẬT KHẨU (SCRYPT + SALT) & KÝ TOKEN (HMAC-SHA256)
@@ -1360,6 +1389,583 @@ app.patch('/api/notifications/:id', async (req, res) => {
     return res.json(notif);
   } catch (err) {
     return res.status(500).json({ message: 'Không thể cập nhật thông báo' });
+  }
+});
+
+// ----------------------------------------------------------------------------
+// 4.7. TÍCH HỢP GOOGLE FREE AI QUA BACKEND PROXY (Gemini Free API + Google GTX)
+// ----------------------------------------------------------------------------
+
+async function callGoogleTranslateFree(text, targetLang = 'vi') {
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(
+      targetLang
+    )}&dt=t&q=${encodeURIComponent(text)}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (Array.isArray(data) && Array.isArray(data[0])) {
+      return data[0].map((part) => (Array.isArray(part) ? part[0] : '')).join('');
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function callGoogleSuggestFree(keyword) {
+  try {
+    const url = `https://suggestqueries.google.com/complete/search?client=firefox&hl=vi&q=${encodeURIComponent(
+      keyword
+    )}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (Array.isArray(data) && Array.isArray(data[1])) {
+      return data[1].slice(0, 6);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function getLatestApiKey(customApiKey) {
+  if (customApiKey && String(customApiKey).trim()) {
+    return String(customApiKey).trim();
+  }
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const match = content.match(/^GEMINI_API_KEY=(.*)$/m);
+      if (match && match[1].trim()) {
+        runtimeGeminiApiKey = match[1].trim().replace(/^['"]|['"]$/g, '');
+      }
+    }
+  } catch {}
+  return (runtimeGeminiApiKey || '').trim();
+}
+
+async function callGeminiFreeAPI(promptText, customApiKey) {
+  const apiKey = getLatestApiKey(customApiKey);
+  if (!apiKey) return null;
+
+  const modelsToTry = [
+    DEFAULT_GEMINI_MODEL,
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+  ];
+  const uniqueModels = [...new Set(modelsToTry)];
+
+  for (const modelName of uniqueModels) {
+    const endpoints = apiKey.startsWith('AQ.')
+      ? [
+          `https://aiplatform.googleapis.com/v1/publishers/google/models/${modelName}:generateContent?key=${encodeURIComponent(
+            apiKey
+          )}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(
+            apiKey
+          )}`,
+        ]
+      : [
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(
+            apiKey
+          )}`,
+          `https://aiplatform.googleapis.com/v1/publishers/google/models/${modelName}:generateContent?key=${encodeURIComponent(
+            apiKey
+          )}`,
+        ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            generationConfig: {
+              temperature: 0.75,
+              maxOutputTokens: 700,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const data = await response.json();
+        const rawText =
+          data?.candidates?.[0]?.content?.parts
+            ?.map((p) => p.text || '')
+            .join('')
+            .trim() || '';
+        if (rawText) {
+          return { text: rawText, model: modelName };
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+async function callFreeZeroKeyAIChat(systemPrompt, userQuestion, history = []) {
+  try {
+    const safeHistory = Array.isArray(history)
+      ? history
+          .slice(-6)
+          .map((m) => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: String(m.content || ''),
+          }))
+          .filter((m) => m.content)
+      : [];
+
+    const response = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...safeHistory,
+          { role: 'user', content: userQuestion },
+        ],
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const reply = data?.choices?.[0]?.message?.content?.trim();
+    if (reply) {
+      return reply;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function buildSmartContextualChatReply({
+  question,
+  videoTitle,
+  videoDescription,
+  category,
+  hashtags,
+  creatorName,
+  musicTitle,
+  trendText = '',
+}) {
+  const q = String(question || '').trim();
+  const qLower = q.toLowerCase();
+  const creator = creatorName || 'nhà sáng tạo VClip';
+  const tagsStr =
+    Array.isArray(hashtags) && hashtags.length > 0
+      ? hashtags.map((h) => '#' + h).join(' ')
+      : '#vclip #xuhuong';
+
+  if (
+    /^(xin chào|chào|hi|hello|alo|ê|bạn là ai|ai vậy|có ai không)/i.test(qLower)
+  ) {
+    return `👋 Xin chào bạn! Mình là Trợ lý AI thông minh trên VClip ✨. Mình đang đồng hành cùng bạn xem video "${videoTitle}" của kênh @${creator}. Bạn có thể hỏi mình bất cứ câu hỏi nào về nội dung video, âm nhạc, cách làm, dịch thuật hoặc trò chuyện tự do nhé!`;
+  }
+
+  if (qLower.includes('tóm tắt') || qLower.includes('nội dung chính')) {
+    return `📌 Tóm tắt nhanh: Video "${videoTitle}" của nhà sáng tạo ${creator} thuộc chủ đề ${
+      category || 'Giải trí'
+    }, truyền tải thông điệp: "${videoDescription}". Video sử dụng giai điệu "${
+      musicTitle || 'Original Sound'
+    }" tạo cảm giác rất cuốn hút người xem.${trendText}`;
+  }
+
+  if (qLower.includes('nhạc') || qLower.includes('bài hát') || qLower.includes('âm thanh')) {
+    return `🎵 Video này đang sử dụng bản nhạc nền "${
+      musicTitle || 'Âm thanh gốc VClip'
+    }". Bạn có thể nhấn trực tiếp vào đĩa nhạc xoay góc dưới bên phải hoặc thanh tên bài hát để nghe thử và dùng ngay âm thanh này cho video của bạn!`;
+  }
+
+  if (qLower.includes('bình luận') || qLower.includes('comment')) {
+    return `💬 Gợi ý 3 bình luận cực chất cho video của ${creator}:\n1. "Xem đi xem lại vẫn thấy cuốn, 10 điểm cho chất lượng video! 🔥"\n2. "Cho mình xin bí quyết quay góc đẹp như thế này với ạ ✨"\n3. "Nhạc hợp cảnh thực sự, thả tim mạnh cho kênh ❤️"`;
+  }
+
+  if (
+    qLower.includes('ai quay') ||
+    qLower.includes('tác giả') ||
+    qLower.includes('chủ kênh') ||
+    qLower.includes('của ai')
+  ) {
+    return `👤 Video "${videoTitle}" được đăng tải bởi nhà sáng tạo **${creator}** trong chuyên mục **${
+      category || 'Giải trí'
+    }**. Bạn có thể nhấn vào ảnh đại diện của ${creator} ở cột bên phải để xem toàn bộ các video khác trên kênh nhé!`;
+  }
+
+  if (
+    qLower.includes('ở đâu') ||
+    qLower.includes('địa điểm') ||
+    qLower.includes('chỗ nào')
+  ) {
+    return `📍 Dựa trên mô tả "${videoDescription}" và các thẻ ${tagsStr}, bối cảnh trong video "${videoTitle}" được ghi hình theo phong cách ${
+      category || 'đời thường'
+    } rất tự nhiên. Bạn có thể để lại bình luận hỏi trực tiếp @${creator} tọa độ chi tiết nhé!`;
+  }
+
+  if (
+    qLower.includes('cách làm') ||
+    qLower.includes('làm sao') ||
+    qLower.includes('bí quyết') ||
+    qLower.includes('hướng dẫn')
+  ) {
+    return `💡 Về câu hỏi "${q}": Trong video "${videoTitle}", @${creator} tập trung vào điểm nhấn "${videoDescription}". Để thực hiện tương tự, bạn nên chú ý góc máy cận cảnh, ánh sáng tự nhiên và kết hợp nhịp cắt theo giai điệu "${
+      musicTitle || 'Original Sound'
+    }" sẽ tạo hiệu ứng thị giác tốt nhất!`;
+  }
+
+  if (qLower.includes('hashtag') || qLower.includes('thẻ')) {
+    return `🏷️ Bộ hashtag đang được sử dụng trong video này gồm: ${tagsStr}.${trendText}`;
+  }
+
+  return `🤖 Trả lời câu hỏi "${q}" của bạn:\nLiên quan đến video "${videoTitle}" (${
+    category || 'Giải trí'
+  }) của @${creator}: Nội dung xoay quanh "${videoDescription}" kết hợp cùng âm thanh "${
+    musicTitle || 'Original Sound'
+  }".${trendText}\n\nBạn muốn mình phân tích sâu hơn chi tiết nào hay viết giúp bạn một bình luận thật ấn tượng về ý này không? ✨`;
+}
+
+function buildSmartVietnameseCaption({ topic, category, style }) {
+  const cleanTopic = (topic || category || 'Khoảnh khắc đời thường').trim();
+  const cat = category || 'Giải trí';
+
+  const styleTemplates = {
+    viral: {
+      titles: [
+        `🔥 Không thể rời mắt: ${cleanTopic} đang gây bão mạng xã hội!`,
+        `✨ Góc nhìn cực đỉnh về ${cleanTopic} mà ai cũng nên xem 1 lần`,
+        `💥 Trend mới siêu cuốn: ${cleanTopic} phiên bản HD cực nét!`,
+      ],
+      desc: `Cùng khám phá khoảnh khắc ${cleanTopic.toLowerCase()} đầy ấn tượng trên VClip! Đừng quên thả tim ❤️ và để lại bình luận cảm nhận của bạn nhé.`,
+      tags: ['xuhuong', 'viral', 'vclip', 'trending', 'fyp'],
+    },
+    funny: {
+      titles: [
+        `😂 Cười xỉu với màn ${cleanTopic} bất ổn nhất hôm nay!`,
+        `🤣 Tưởng không vui mà vui không tưởng: ${cleanTopic} cực hài!`,
+        `😆 Khi bạn đam mê ${cleanTopic} nhưng vũ trụ lại trêu đùa!`,
+      ],
+      desc: `Xem đến giây cuối đảm bảo cười mệt nghỉ với pha ${cleanTopic.toLowerCase()} siêu lầy lội này! Tag ngay hội bạn thân vào xem chung nào 😂✨`,
+      tags: ['haihuoc', 'vclip', 'giaitri', 'cuoixiu', 'genz'],
+    },
+    chill: {
+      titles: [
+        `🌿 Chút bình yên dịu dàng: ${cleanTopic} giữa ngày bộn bề ✨`,
+        `🌅 Chữa lành tâm hồn cùng thước phim ${cleanTopic} cực chill`,
+        `🍃 Dừng lại một nhịp để tận hưởng ${cleanTopic} thật trọn vẹn`,
+      ],
+      desc: `Một góc nhỏ bình yên dành cho những ai yêu thích ${cleanTopic.toLowerCase()}. Bật âm thanh lên và thư giãn cùng giai điệu nhẹ nhàng này nhé 🎶`,
+      tags: ['chill', 'chualanh', 'vclip', 'doisong', 'aesthetic'],
+    },
+    review: {
+      titles: [
+        `📌 Đánh giá thực tế & trải nghiệm chi tiết: ${cleanTopic}`,
+        `💡 Mẹo hay & Góc nhìn toàn diện về ${cleanTopic} bạn cần biết`,
+        `⭐ Trải nghiệm thực tế ${cleanTopic}: Có thật sự đáng thử?`,
+      ],
+      desc: `Tổng hợp những điểm nổi bật nhất về ${cleanTopic.toLowerCase()} với chất lượng hình ảnh thực tế sắc nét. Lưu lại ngay để áp dụng khi cần nhé!`,
+      tags: ['review', 'meohay', 'khampha', 'vclip', 'chiase'],
+    },
+  };
+
+  const chosen = styleTemplates[style] || styleTemplates.viral;
+  const randomTitle =
+    chosen.titles[Math.floor(Math.random() * chosen.titles.length)];
+
+  const categorySlug = cat
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]/g, '');
+
+  const topicSlug = cleanTopic
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2)
+    .slice(0, 2)
+    .join('');
+
+  const finalTags = [
+    ...new Set([
+      ...(topicSlug ? [topicSlug] : []),
+      ...(categorySlug ? [categorySlug] : []),
+      ...chosen.tags,
+    ]),
+  ].slice(0, 6);
+
+  return {
+    title: randomTitle,
+    description: chosen.desc,
+    hashtags: finalTags,
+  };
+}
+
+app.get('/api/ai/status', (_req, res) => {
+  return res.json({
+    enabled: true,
+    hasApiKey: Boolean(runtimeGeminiApiKey),
+    provider: runtimeGeminiApiKey
+      ? `Google Gemini (${DEFAULT_GEMINI_MODEL})`
+      : 'Google Free API (Suggest + Translate GTX + VClip Smart AI)',
+    model: DEFAULT_GEMINI_MODEL,
+  });
+});
+
+app.post('/api/ai/config', (req, res) => {
+  const { apiKey } = req.body || {};
+  runtimeGeminiApiKey = String(apiKey || '').trim();
+
+  // Lưu vào file .env ở thư mục gốc để giữ nguyên khi khởi động lại server
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+      if (envContent.includes('GEMINI_API_KEY=')) {
+        envContent = envContent.replace(
+          /GEMINI_API_KEY=.*/g,
+          `GEMINI_API_KEY=${runtimeGeminiApiKey}`
+        );
+      } else {
+        envContent += `\nGEMINI_API_KEY=${runtimeGeminiApiKey}\n`;
+      }
+    } else {
+      envContent = `PORT=3000\nMONGODB_URI=${MONGODB_URI}\nGEMINI_API_KEY=${runtimeGeminiApiKey}\nAI_MODEL=${DEFAULT_GEMINI_MODEL}\n`;
+    }
+    fs.writeFileSync(envPath, envContent, 'utf8');
+  } catch {}
+
+  return res.json({
+    success: true,
+    hasApiKey: Boolean(runtimeGeminiApiKey),
+    provider: runtimeGeminiApiKey
+      ? `Google Gemini (${DEFAULT_GEMINI_MODEL})`
+      : 'Google Free API (Suggest + Translate GTX + VClip Smart AI)',
+  });
+});
+
+app.post('/api/ai/generate-caption', async (req, res) => {
+  try {
+    const {
+      topic = '',
+      category = 'Giải trí',
+      style = 'viral',
+      apiKey,
+    } = req.body || {};
+
+    const styleDescMap = {
+      viral: 'thu hút, bắt trend xu hướng TikTok/Reels, gây tò mò',
+      funny: 'hài hước, dí dỏm, trẻ trung chuẩn GenZ',
+      chill: 'nhẹ nhàng, cảm xúc, chữa lành, thơ mộng',
+      review: 'chuyên nghiệp, đánh giá chi tiết, cung cấp thông tin hữu ích',
+    };
+
+    const prompt = `Bạn là trợ lý sáng tạo nội dung video ngắn trên ứng dụng VClip.
+Hãy viết tiêu đề, mô tả và danh sách 5-6 hashtag (không có dấu # ở đầu mỗi phần tử mảng) bằng tiếng Việt cho video có:
+- Chủ đề / Ý tưởng: "${topic || category}"
+- Danh mục: "${category}"
+- Phong cách: ${styleDescMap[style] || styleDescMap.viral}
+
+Trả về đúng định dạng JSON thuần túy (không bọc markdown) theo mẫu:
+{"title": "...", "description": "...", "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]}`;
+
+    const geminiRes = await callGeminiFreeAPI(prompt, apiKey);
+    if (geminiRes && geminiRes.text) {
+      const cleaned = geminiRes.text
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        try {
+          const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+          const cleanTags = Array.isArray(parsed.hashtags)
+            ? parsed.hashtags.map((t) => String(t).replace(/^#/, '').trim()).filter(Boolean)
+            : ['vclip', 'xuhuong'];
+          return res.json({
+            success: true,
+            source: `Google Gemini (${geminiRes.model})`,
+            title: parsed.title || `Khám phá ${topic || category} ✨`,
+            description:
+              parsed.description ||
+              `Video chia sẻ khoảnh khắc ${topic || category} trên VClip!`,
+            hashtags: cleanTags,
+          });
+        } catch {}
+      }
+    }
+
+    // Kết hợp Google Suggest Free API để lấy từ khóa xu hướng thực tế từ Google
+    const googleSuggestions = await callGoogleSuggestFree(topic || category);
+    const smartResult = buildSmartVietnameseCaption({ topic, category, style });
+
+    if (googleSuggestions.length > 0) {
+      const extraTags = googleSuggestions
+        .slice(0, 2)
+        .map((s) =>
+          String(s)
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/[^a-z0-9]/g, '')
+        )
+        .filter((s) => s.length >= 3 && s.length <= 18);
+      smartResult.hashtags = [
+        ...new Set([...smartResult.hashtags, ...extraTags]),
+      ].slice(0, 6);
+    }
+
+    return res.json({
+      success: true,
+      source: 'Google Free API (Google Suggest + VClip Smart AI)',
+      ...smartResult,
+    });
+  } catch (err) {
+    console.error('AI generate-caption error:', err);
+    return res.status(500).json({ message: 'Không thể tạo gợi ý AI lúc này' });
+  }
+});
+
+app.post('/api/ai/ask-video', async (req, res) => {
+  try {
+    const {
+      videoTitle = '',
+      videoDescription = '',
+      category = '',
+      hashtags = [],
+      creatorName = '',
+      musicTitle = '',
+      question = 'Tóm tắt nội dung video này',
+      history = [],
+      apiKey,
+    } = req.body || {};
+
+    const historyContext =
+      Array.isArray(history) && history.length > 0
+        ? '\nLịch sử trò chuyện gần đây:\n' +
+          history
+            .slice(-6)
+            .map((m) => `${m.role === 'assistant' ? 'AI' : 'Người xem'}: ${m.content}`)
+            .join('\n')
+        : '';
+
+    const prompt = `Bạn là Trợ lý AI thông minh tích hợp trên ứng dụng video ngắn VClip.
+Thông tin video người dùng đang xem:
+- Tiêu đề: "${videoTitle}"
+- Mô tả: "${videoDescription}"
+- Danh mục: "${category}"
+- Tác giả: "${creatorName}"
+- Nhạc nền: "${musicTitle}"
+- Hashtags: ${Array.isArray(hashtags) ? hashtags.map((h) => '#' + h).join(', ') : ''}${historyContext}
+
+Tin nhắn / Câu hỏi hiện tại của người xem: "${question}"
+Hãy trả lời trực tiếp, tự nhiên, thông minh, thân thiện bằng tiếng Việt và gợi ý 1 câu bình luận thú vị liên quan đến câu trả lời để người xem có thể đăng vào video.
+Trả về JSON thuần túy theo mẫu:
+{"answer": "...", "suggestedComment": "..."}`;
+
+    const geminiRes = await callGeminiFreeAPI(prompt, apiKey);
+    if (geminiRes && geminiRes.text) {
+      const cleaned = geminiRes.text
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        try {
+          const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+          return res.json({
+            success: true,
+            source: `Google Gemini (${geminiRes.model})`,
+            answer: parsed.answer || geminiRes.text,
+            suggestedComment:
+              parsed.suggestedComment ||
+              `Video "${videoTitle}" cuốn quá, thả tim cho kênh @${creatorName} nhé! ❤️🔥`,
+          });
+        } catch {}
+      }
+      return res.json({
+        success: true,
+        source: `Google Gemini (${geminiRes.model})`,
+        answer: geminiRes.text,
+        suggestedComment: `Nội dung của ${creatorName} đỉnh thật sự! ❤️✨`,
+      });
+    }
+
+    // Nếu người dùng yêu cầu dịch sang tiếng Anh/ngôn ngữ khác -> Gọi trực tiếp Google Translate Free API (GTX)
+    const qLower = String(question).toLowerCase();
+    if (qLower.includes('dịch') || qLower.includes('tiếng anh') || qLower.includes('english')) {
+      const translatedTitle = await callGoogleTranslateFree(videoTitle, 'en');
+      const translatedDesc = await callGoogleTranslateFree(videoDescription, 'en');
+      return res.json({
+        success: true,
+        source: 'Google Translate Free API (GTX)',
+        answer: `🌐 Bản dịch tiếng Anh tự động từ Google:\n• Title: "${
+          translatedTitle || videoTitle
+        }"\n• Description: "${translatedDesc || videoDescription}"`,
+        suggestedComment: `Awesome video by ${creatorName}! Love the vibe 🔥❤️`,
+      });
+    }
+
+    // Gọi Free Zero-Key AI Chat Proxy để trả lời tự nhiên mọi câu hỏi chat trực tiếp
+    const systemPrompt = `Bạn là Trợ lý AI thông minh trên ứng dụng xem video ngắn VClip. Người dùng đang xem video "${videoTitle}" của tác giả "${creatorName}", mô tả: "${videoDescription}", danh mục: "${category}", nhạc nền: "${musicTitle}". Hãy trả lời trực tiếp, ngắn gọn (2-4 câu), thân thiện bằng tiếng Việt cho bất kỳ câu hỏi hay tin nhắn trò chuyện nào của người dùng.`;
+    const freeChatReply = await callFreeZeroKeyAIChat(systemPrompt, question, history);
+    if (freeChatReply) {
+      return res.json({
+        success: true,
+        source: 'Google & Open Free AI Chat Proxy',
+        answer: freeChatReply,
+        suggestedComment: `Video "${videoTitle}" của @${creatorName} chất lượng quá! Thả 5 sao ⭐❤️`,
+      });
+    }
+
+    // Kết hợp Google Suggest Free API + phân tích ngữ cảnh câu hỏi trực tiếp
+    const relatedTrends = await callGoogleSuggestFree(question || category || videoTitle);
+    const trendText =
+      relatedTrends.length > 0
+        ? `\n🔥 Gợi ý tìm kiếm từ Google: ${relatedTrends.slice(0, 3).join(', ')}.`
+        : '';
+
+    const answer = buildSmartContextualChatReply({
+      question,
+      videoTitle,
+      videoDescription,
+      category,
+      hashtags,
+      creatorName,
+      musicTitle,
+      trendText,
+    });
+
+    return res.json({
+      success: true,
+      source: 'Google Free API (Suggest + GTX + VClip Smart Chat)',
+      answer,
+      suggestedComment: `Video "${videoTitle}" chất lượng quá ${creatorName} ơi! Thả 5 sao luôn ⭐❤️`,
+    });
+  } catch (err) {
+    console.error('AI ask-video error:', err);
+    return res.status(500).json({ message: 'Không thể kết nối trợ lý AI lúc này' });
   }
 });
 

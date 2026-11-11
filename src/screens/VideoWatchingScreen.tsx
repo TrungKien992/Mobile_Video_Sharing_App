@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { CommentModal } from '../components/CommentModal';
+import { AIVideoModal } from '../components/AIVideoModal';
 import { useApp } from '../context/AppContext';
 import { INITIAL_FILTERS } from '../data/initialFilters';
 import { VideoCacheService } from '../services/videoCacheService';
@@ -49,6 +50,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   });
 
   const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const viewedIdsRef = useRef<Set<string>>(new Set());
   const discSpinAnim = useRef(new Animated.Value(0)).current;
@@ -315,6 +317,21 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           <Text style={styles.actionLabel}>Chia sẻ</Text>
         </TouchableOpacity>
 
+        {/* Nút Trợ lý Google AI (Tóm tắt, Dịch thuật & Gợi ý bình luận) */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => setAiModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#5B4BFF', '#EC4899']}
+            style={styles.aiSideCircle}
+          >
+            <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+          </LinearGradient>
+          <Text style={styles.actionLabel}>AI</Text>
+        </TouchableOpacity>
+
         {/* Tùy chọn thêm / Xóa video nếu là chủ sở hữu */}
         <TouchableOpacity
           style={styles.actionBtn}
@@ -453,11 +470,17 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
         </TouchableOpacity>
       </View>
 
-      {/* 5. Modal bình luận */}
+      {/* 5. Modal bình luận & Modal Google AI */}
       <CommentModal
         visible={commentModalVisible}
         videoId={currentVideo.id}
         onClose={() => setCommentModalVisible(false)}
+      />
+
+      <AIVideoModal
+        visible={aiModalVisible}
+        video={currentVideo}
+        onClose={() => setAiModalVisible(false)}
       />
     </View>
   );
@@ -548,6 +571,15 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     alignItems: 'center',
+  },
+  aiSideCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.65)',
   },
   vinylDiscTouch: {
     marginTop: 4,

@@ -23,7 +23,7 @@ import { INITIAL_MUSICS } from '../data/initialMusics';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { FilterModal } from '../components/FilterModal';
 import { MusicModal } from '../components/MusicModal';
-import { uploadFile } from '../api/client';
+import { uploadFile, generateAICaption } from '../api/client';
 import { showMessage, showToast } from '../utils/dialog';
 import { FilterItem, MusicItem, VideoDraft } from '../types';
 
@@ -82,6 +82,12 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   const [uploadingLocal, setUploadingLocal] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [savedDrafts, setSavedDrafts] = useState<VideoDraft[]>([]);
+
+  // Trạng thái Google AI Caption & Hashtag Generator
+  const [aiStyle, setAiStyle] = useState<'viral' | 'funny' | 'chill' | 'review'>('viral');
+  const [aiTopicPrompt, setAiTopicPrompt] = useState<string>('');
+  const [aiGenerating, setAiGenerating] = useState<boolean>(false);
+  const [aiSourceLabel, setAiSourceLabel] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -184,6 +190,32 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
 
   const handleRemoveHashtag = (tagToRemove: string) => {
     setHashtags(hashtags.filter((t) => t !== tagToRemove));
+  };
+
+  const handleGenerateByGoogleAI = async () => {
+    setAiGenerating(true);
+    try {
+      const topicSeed =
+        aiTopicPrompt.trim() ||
+        (title !== 'Khoảnh khắc thú vị hôm nay ✨' ? title : '') ||
+        category;
+      const result = await generateAICaption({
+        topic: topicSeed,
+        category,
+        style: aiStyle,
+      });
+      if (result.title) setTitle(result.title);
+      if (result.description) setDescription(result.description);
+      if (Array.isArray(result.hashtags) && result.hashtags.length > 0) {
+        setHashtags(result.hashtags);
+      }
+      setAiSourceLabel(result.source || 'Google Free AI');
+      showToast('✨ Đã tạo Tiêu đề, Mô tả & Hashtag bằng Google AI!', 'success');
+    } catch {
+      showToast('Không thể gọi AI lúc này, vui lòng thử lại', 'error');
+    } finally {
+      setAiGenerating(false);
+    }
   };
 
   const handleSaveDraft = async () => {
@@ -514,6 +546,114 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         >
+          {/* Khung Trợ lý Google AI tạo Caption & Hashtag tự động */}
+          <View
+            style={[
+              styles.aiAssistantCard,
+              {
+                backgroundColor: theme.primaryLight,
+                borderColor: theme.primary,
+              },
+            ]}
+          >
+            <View style={styles.aiHeaderRow}>
+              <View style={styles.aiTitleLeft}>
+                <LinearGradient
+                  colors={['#5B4BFF', '#EC4899']}
+                  style={styles.aiSparkleBadge}
+                >
+                  <Ionicons name="sparkles" size={13} color="#FFFFFF" />
+                </LinearGradient>
+                <View>
+                  <Text style={[styles.aiCardTitle, { color: theme.text }]}>
+                    Trợ lý Google AI viết Caption & Hashtag
+                  </Text>
+                  <Text style={[styles.aiCardSub, { color: theme.textSecondary }]}>
+                    {aiSourceLabel
+                      ? `Nguồn: ${aiSourceLabel}`
+                      : 'Tích hợp qua Backend Proxy (.env)'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TextInput
+              style={[
+                styles.aiPromptInput,
+                { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border },
+              ]}
+              placeholder="Nhập ý tưởng ngắn (VD: Cún cưng chạy chơi ngoài công viên buổi sáng)..."
+              placeholderTextColor={theme.textMuted}
+              value={aiTopicPrompt}
+              onChangeText={setAiTopicPrompt}
+            />
+
+            <View style={styles.aiStyleRow}>
+              {(
+                [
+                  { id: 'viral', label: '🔥 Xu hướng' },
+                  { id: 'funny', label: '😂 Hài hước' },
+                  { id: 'chill', label: '🌿 Chữa lành' },
+                  { id: 'review', label: '📌 Review' },
+                ] as const
+              ).map((st) => {
+                const active = aiStyle === st.id;
+                return (
+                  <TouchableOpacity
+                    key={st.id}
+                    style={[
+                      styles.aiStyleChip,
+                      {
+                        backgroundColor: active ? theme.primary : theme.surface,
+                      },
+                    ]}
+                    onPress={() => setAiStyle(st.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.aiStyleChipText,
+                        { color: active ? '#FFFFFF' : theme.textSecondary },
+                      ]}
+                    >
+                      {st.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              onPress={handleGenerateByGoogleAI}
+              disabled={aiGenerating}
+              activeOpacity={0.85}
+              style={styles.aiGenerateBtnWrap}
+            >
+              <LinearGradient
+                colors={['#5B4BFF', '#EC4899']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.aiGenerateBtnGradient}
+              >
+                {aiGenerating ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.aiGenerateBtnText}>
+                      Google AI đang sáng tạo nội dung...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                    <Text style={styles.aiGenerateBtnText}>
+                      ✨ Gợi ý Tiêu đề, Mô tả & Hashtag bằng Google AI
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.formGroup}>
             <Text style={[styles.inputLabel, { color: theme.text }]}>
               Tiêu đề video *
@@ -868,6 +1008,100 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
+  },
+  aiAssistantCard: {
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  aiHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  aiTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  aiSparkleBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  aiCardSub: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  aiKeyToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  aiKeyToggleText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  apiKeyInputWrap: {
+    marginBottom: 8,
+  },
+  apiKeyInput: {
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    fontSize: 11,
+  },
+  aiPromptInput: {
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  aiStyleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  aiStyleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  aiStyleChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  aiGenerateBtnWrap: {
+    borderRadius: 11,
+    overflow: 'hidden',
+  },
+  aiGenerateBtnGradient: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  aiGenerateBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   formGroup: {
     marginBottom: 16,
