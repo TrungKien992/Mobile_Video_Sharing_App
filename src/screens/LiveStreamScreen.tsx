@@ -9,6 +9,7 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { FloatingHeart } from '../components/FloatingHeart';
 import { useApp } from '../context/AppContext';
-import { confirmDialog, showMessage, showToast } from '../utils/dialog';
+import { confirmDialog, showMessage } from '../utils/dialog';
 import { formatNumber, formatPrice } from '../utils/format';
 
 interface LiveMessage {
@@ -40,6 +41,32 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
   const [hearts, setHearts] = useState<{ id: string; color: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [liveMessages, setLiveMessages] = useState<LiveMessage[]>([]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Theo dõi chiều cao bàn phím để đẩy ô bình luận, khung chat & thẻ sản phẩm lên trên bàn phím
+  useEffect(() => {
+    const onShow = (e: any) => {
+      const h = e?.endCoordinates?.height;
+      if (h) setKeyboardHeight(h);
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const s1 = Keyboard.addListener('keyboardWillShow', onShow);
+    const s2 = Keyboard.addListener('keyboardDidShow', onShow);
+    const h1 = Keyboard.addListener('keyboardWillHide', onHide);
+    const h2 = Keyboard.addListener('keyboardDidHide', onHide);
+    return () => {
+      s1.remove();
+      s2.remove();
+      h1.remove();
+      h2.remove();
+    };
+  }, []);
+
+  // Khi bàn phím mở: thanh nhập nằm sát trên bàn phím (không cộng thêm safe-area đáy)
+  const bottomBarOffset = keyboardHeight > 0 ? keyboardHeight + 8 : 14 + bottomInset;
+  const chatOffset = bottomBarOffset + 56;
+  const productOffset = Math.max(235 + bottomInset, chatOffset + 165);
 
   // Tự động cuộn xuống tin nhắn mới nhất
   useEffect(() => {
@@ -69,7 +96,6 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
     setLiveMessages((prev) => [...prev, newMsg]);
     setChatInput('');
     addReaction('#FF3366');
-    showToast('Đã gửi bình luận trực tiếp 💬', 'info');
   };
 
   const handleBuyLiveProduct = async () => {
@@ -88,16 +114,14 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={styles.container} enabled={false}>
       {/* 1. Video Player Live Stream */}
       <VideoPlayer
         videoUrl={liveVideo.videoUrl}
         thumbnailUrl={liveVideo.thumbnailUrl}
         isPlaying={true}
         isLooping={true}
+        topSafeOffset={topInset}
         onDoubleTap={() => addReaction('#FF3366')}
       />
 
@@ -123,7 +147,12 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.closeBtn} onPress={goBack} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={goBack}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            activeOpacity={0.8}
+          >
             <Ionicons name="close" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -135,7 +164,8 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
       ))}
 
       {/* 4. Thẻ sản phẩm ghim mua ngay (Pinned Product Card) */}
-      <View style={[styles.pinnedProductCard, { bottom: 235 + bottomInset }]}>
+      {keyboardHeight === 0 && (
+      <View style={[styles.pinnedProductCard, { bottom: productOffset }]}>
         <Image
           source={{
             uri:
@@ -165,29 +195,47 @@ export const LiveStreamScreen: React.FC<{ videoId: string }> = ({ videoId }) => 
           <Text style={styles.buyNowText}>Mua ngay</Text>
         </TouchableOpacity>
       </View>
+      )}
 
       {/* 5. Bình luận trực tiếp nổi (Live Chat overlay mở rộng & tự cuộn) */}
-      <View style={styles.liveChatContainer}>
+      <View style={[styles.liveChatContainer, { bottom: chatOffset }]}>
         <ScrollView
           ref={chatScrollRef}
           style={styles.chatScroll}
           contentContainerStyle={styles.chatContent}
           showsVerticalScrollIndicator={false}
         >
-          {liveMessages.map((msg) => (
-            <View key={msg.id} style={styles.chatBubble}>
-              <Image source={{ uri: msg.avatar }} style={styles.chatAvatar} />
-              <View style={styles.chatTextWrap}>
-                <Text style={styles.chatSender}>{msg.sender}</Text>
-                <Text style={styles.chatMessage}>{msg.text}</Text>
+          {liveMessages.map((msg) => {
+            const isMyLiveMsg =
+              msg.sender === (currentUser.displayName || 'Bạn') ||
+              msg.sender === currentUser.name;
+            return (
+              <View key={msg.id} style={styles.chatBubble}>
+                <Image source={{ uri: msg.avatar }} style={styles.chatAvatar} />
+                <View style={styles.chatTextWrap}>
+                  <Text style={styles.chatSender}>{msg.sender}</Text>
+                  <Text style={styles.chatMessage}>{msg.text}</Text>
+                </View>
+                {isMyLiveMsg && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      setLiveMessages((prev) => prev.filter((m) => m.id !== msg.id))
+                    }
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ marginLeft: 6, alignSelf: 'center', opacity: 0.75 }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#F87171" />
+                  </TouchableOpacity>
+                )}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       </View>
 
       {/* 6. Thanh nhập chat & nút thả reaction */}
-      <View style={[styles.bottomBar, { bottom: 14 + bottomInset }]}>
+      <View style={[styles.bottomBar, { bottom: bottomBarOffset }]}>
         <View style={styles.chatInputWrap}>
           <TextInput
             style={styles.chatInput}

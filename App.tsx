@@ -32,7 +32,7 @@ const MainNavigator: React.FC = () => {
   const insets = useSafeAreaInsets();
 
   if (!ready) {
-    return <LoadingView message="Đang đồng bộ dữ liệu từ MongoDB..." />;
+    return <LoadingView message="Đang tải..." />;
   }
 
   const renderActiveScreen = () => {

@@ -77,7 +77,12 @@ export const CreatorProfileScreen: React.FC<{ userId: string }> = ({ userId }) =
           { backgroundColor: theme.surface, borderBottomColor: theme.border },
         ]}
       >
-        <TouchableOpacity style={styles.iconBtn} onPress={goBack} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={goBack}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          activeOpacity={0.7}
+        >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>

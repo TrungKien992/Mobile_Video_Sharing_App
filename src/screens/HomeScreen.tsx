@@ -107,20 +107,27 @@ export const HomeScreen: React.FC = () => {
           }
         }}
       >
-        <LinearGradient
-          colors={isMe ? ['#06B6D4', '#3B82F6'] : theme.primaryGradient}
-          style={styles.storyRing}
-        >
-          <Image
-            source={{ uri: isMe ? currentUser.avatarUrl : item.avatarUrl }}
-            style={[styles.storyAvatar, { borderColor: theme.surface }]}
-          />
+        <View style={styles.storyRingWrap}>
+          <LinearGradient
+            colors={isMe ? ['#06B6D4', '#3B82F6'] : theme.primaryGradient}
+            style={styles.storyRing}
+          >
+            <Image
+              source={{ uri: isMe ? currentUser.avatarUrl : item.avatarUrl }}
+              style={[styles.storyAvatar, { borderColor: theme.surface }]}
+            />
+          </LinearGradient>
           {isMe && (
-            <View style={[styles.addStoryBadge, { backgroundColor: theme.accent }]}>
+            <View
+              style={[
+                styles.addStoryBadge,
+                { backgroundColor: theme.accent, borderColor: theme.surface },
+              ]}
+            >
               <Ionicons name="add" size={12} color="#FFFFFF" />
             </View>
           )}
-        </LinearGradient>
+        </View>
         <Text
           style={[styles.storyName, { color: theme.textSecondary }]}
           numberOfLines={1}
@@ -472,6 +479,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 66,
   },
+  storyRingWrap: {
+    width: 58,
+    height: 58,
+    position: 'relative',
+  },
   storyRing: {
     width: 58,
     height: 58,
@@ -490,14 +502,15 @@ const styles = StyleSheet.create({
   addStoryBadge: {
     position: 'absolute',
     bottom: -2,
-    right: -2,
-    width: 19,
-    height: 19,
+    right: -4,
+    width: 20,
+    height: 20,
     borderRadius: 10,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
   },
   storyName: {
     fontSize: 11,

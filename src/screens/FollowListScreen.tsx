@@ -139,7 +139,12 @@ export const FollowListScreen: React.FC<FollowListScreenProps> = ({
             { backgroundColor: theme.surface, borderBottomColor: theme.border },
           ]}
         >
-          <TouchableOpacity onPress={goBack} style={styles.iconBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+          onPress={goBack}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={styles.iconBtn}
+          activeOpacity={0.7}
+        >
             <Ionicons name="arrow-back" size={22} color={theme.text} />
           </TouchableOpacity>
 

@@ -77,7 +77,11 @@ export const NotificationsScreen: React.FC = () => {
           { backgroundColor: theme.surface, borderBottomColor: theme.border },
         ]}
       >
-        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={goBack}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.titleCenter}>

@@ -94,7 +94,11 @@ export const RegisterScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={goBack}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: theme.text }]}>Đăng ký tài khoản</Text>

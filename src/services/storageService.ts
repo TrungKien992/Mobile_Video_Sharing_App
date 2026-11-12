@@ -386,6 +386,23 @@ export const StorageService = {
     return newComment;
   },
 
+  async deleteComment(commentId: string, userId?: string): Promise<CommentItem[]> {
+    try {
+      await api.delete(`/api/comments/${commentId}`, {
+        data: { userId },
+        params: { userId },
+      });
+    } catch {}
+
+    const stored = await AsyncStorage.getItem(STORAGE_KEYS.COMMENTS);
+    const currentComments: CommentItem[] = stored
+      ? JSON.parse(stored)
+      : INITIAL_COMMENTS;
+    const updated = currentComments.filter((c) => c.id !== commentId);
+    await this.saveComments(updated);
+    return updated;
+  },
+
   async getUsers(currentUserId: string = 'user_demo'): Promise<UserProfile[]> {
     try {
       const remoteUsers = await api.get<UserProfile[]>('/api/users', {

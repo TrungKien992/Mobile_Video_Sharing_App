@@ -22,6 +22,7 @@ import { showMessage, showToast } from '../utils/dialog';
 export const CreateVideoScreen: React.FC = () => {
   const {
     navigateTo,
+    goBack,
     setTab,
     createPresetMusicId,
     clearCreatePresetMusic,
@@ -486,9 +487,10 @@ export const CreateVideoScreen: React.FC = () => {
       <View style={[styles.topBar, { top: topOffset }]}>
         <TouchableOpacity
           style={styles.circleIconBtn}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
           onPress={() => {
             stopCameraStream();
-            setTab('home');
+            goBack();
           }}
           activeOpacity={0.8}
         >

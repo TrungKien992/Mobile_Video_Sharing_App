@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -54,6 +54,7 @@ export interface AppContextType {
   openCreateWithMusic: (musicId: string) => void;
   clearCreatePresetMusic: () => void;
   addComment: (videoId: string, text: string, rating?: number) => Promise<CommentItem>;
+  deleteComment: (commentId: string) => Promise<void>;
   toggleLikeComment: (commentId: string) => Promise<void>;
   addNewVideo: (videoData: Partial<VideoItem>) => Promise<VideoItem>;
   deleteVideo: (videoId: string) => Promise<void>;
@@ -214,57 +215,184 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useAutoPersist('@vclip_comments_v2', comments, ready);
   useAutoPersist('@vclip_notifications_v2', notifications, ready);
 
-  const navigateTo = useCallback(
-    (route: ScreenRoute) => {
-      setRouteHistory((prev) => [...prev, activeRoute]);
-      setActiveRoute(route);
-      if (route.name === 'main' && route.tab) {
-        setCurrentTab(route.tab);
+  const navRef = useRef<{
+    activeRoute: ScreenRoute;
+    currentTab: MainTabType;
+    lastMainTab: MainTabType;
+    history: ScreenRoute[];
+  }>({
+    activeRoute: { name: 'main', tab: 'home' },
+    currentTab: 'home',
+    lastMainTab: 'home',
+    history: [],
+  });
+  const isPopStateRef = useRef(false);
+
+  const isSameRoute = useCallback((a: ScreenRoute, b: ScreenRoute): boolean => {
+    if (a.name !== b.name) return false;
+    switch (a.name) {
+      case 'main':
+        return b.name === 'main' && (a.tab || 'home') === (b.tab || 'home');
+      case 'watch':
+      case 'live':
+        return (b.name === 'watch' || b.name === 'live') && a.videoId === b.videoId;
+      case 'creator_profile':
+        return b.name === 'creator_profile' && a.userId === b.userId;
+      case 'follow_list':
+        return (
+          b.name === 'follow_list' &&
+          a.userId === b.userId &&
+          (a.initialTab || 'following') === (b.initialTab || 'following')
+        );
+      default:
+        return true;
+    }
+  }, []);
+
+  const syncNavState = useCallback(
+    (
+      nextRoute: ScreenRoute,
+      nextTab: MainTabType,
+      nextHistory: ScreenRoute[],
+      historyMode: 'push' | 'replace' | 'none' = 'none'
+    ) => {
+      navRef.current.activeRoute = nextRoute;
+      navRef.current.currentTab = nextTab;
+      if (nextTab !== 'create') {
+        navRef.current.lastMainTab = nextTab;
       }
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.pushState) {
+      navRef.current.history = nextHistory;
+
+      setActiveRoute(nextRoute);
+      setCurrentTab(nextTab);
+      setRouteHistory(nextHistory);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && !isPopStateRef.current) {
         try {
-          window.history.pushState({ route }, '');
+          if (historyMode === 'push' && window.history?.pushState) {
+            window.history.pushState({ route: nextRoute, tab: nextTab }, '');
+          } else if (historyMode === 'replace' && window.history?.replaceState) {
+            window.history.replaceState({ route: nextRoute, tab: nextTab }, '');
+          }
         } catch {}
       }
     },
-    [activeRoute]
+    []
+  );
+
+  const setTab = useCallback(
+    (tab: MainTabType) => {
+      if (tab === 'create') {
+        const curRoute = navRef.current.activeRoute;
+        const baseRoute: ScreenRoute = {
+          name: 'main',
+          tab: navRef.current.lastMainTab || 'home',
+        };
+        const nextHistory =
+          curRoute.name === 'main' ? [baseRoute] : [baseRoute, curRoute];
+        syncNavState({ name: 'main', tab: 'create' }, 'create', nextHistory, 'push');
+        return;
+      }
+      // Chuyển về 1 trong 4 Tab gốc ('home', 'search', 'friends', 'profile') -> xóa sạch stack trung gian cũ
+      syncNavState({ name: 'main', tab }, tab, [], 'replace');
+    },
+    [syncNavState]
+  );
+
+  const navigateTo = useCallback(
+    (route: ScreenRoute) => {
+      if (route.name === 'main') {
+        setTab(route.tab || 'home');
+        return;
+      }
+
+      const curRoute = navRef.current.activeRoute;
+      const curTab = navRef.current.currentTab;
+      const curHistory = navRef.current.history;
+
+      if (isSameRoute(curRoute, route)) {
+        syncNavState(route, curTab, curHistory, 'replace');
+        return;
+      }
+
+      // Chuyển đổi qua lại giữa Login <-> Register hoặc thoát khỏi màn hình Auth: không lưu màn hình Auth vào lịch sử
+      if (curRoute.name === 'login' || curRoute.name === 'register') {
+        const redirectTo =
+          route.name === 'login' || route.name === 'register'
+            ? route.redirectTo || curRoute.redirectTo
+            : undefined;
+        const nextRoute = redirectTo ? { ...route, redirectTo } : route;
+        syncNavState(nextRoute, curTab, curHistory, 'replace');
+        return;
+      }
+
+      const currentNormalized: ScreenRoute =
+        curRoute.name === 'main'
+          ? { name: 'main', tab: curTab }
+          : curRoute;
+
+      // Nếu route đích đã có sẵn trong history -> thu gọn stack tới vị trí đó để tránh lặp vòng tròn
+      const existingIndex = curHistory.findIndex((r) => isSameRoute(r, route));
+      let nextHistory: ScreenRoute[];
+      if (existingIndex >= 0) {
+        nextHistory = curHistory.slice(0, existingIndex);
+      } else {
+        const lastInHistory = curHistory[curHistory.length - 1];
+        nextHistory =
+          lastInHistory && isSameRoute(lastInHistory, currentNormalized)
+            ? [...curHistory]
+            : [...curHistory, currentNormalized];
+      }
+
+      syncNavState(route, curTab, nextHistory, 'push');
+    },
+    [isSameRoute, setTab, syncNavState]
   );
 
   const goBack = useCallback(() => {
-    if (routeHistory.length > 0) {
-      const prev = routeHistory[routeHistory.length - 1];
-      setRouteHistory((h) => h.slice(0, h.length - 1));
-      setActiveRoute(prev);
-      if (prev.name === 'main' && prev.tab) {
-        setCurrentTab(prev.tab);
-      }
-      return true;
-    } else if (activeRoute.name !== 'main' || currentTab !== 'home') {
-      setActiveRoute({ name: 'main', tab: 'home' });
-      setCurrentTab('home');
-      return true;
-    }
-      return false;
-    }, [routeHistory, activeRoute, currentTab]);
+    const curHistory = navRef.current.history;
+    const curRoute = navRef.current.activeRoute;
+    const curTab = navRef.current.currentTab;
+    const lastMain = navRef.current.lastMainTab || 'home';
 
-  const completePostAndWatch = useCallback((videoId: string) => {
-    setRouteHistory((prev) => {
-      const cleaned = prev.filter(
-        (r) => r.name !== 'create_post' && !(r.name === 'main' && r.tab === 'create')
-      );
-      if (cleaned.length === 0) {
-        return [{ name: 'main', tab: 'home' }];
+    if (curHistory.length > 0) {
+      const prev = curHistory[curHistory.length - 1];
+      const remaining = curHistory.slice(0, -1);
+
+      if (prev.name === 'main') {
+        const targetTab = prev.tab || lastMain;
+        const cleanedHistory = targetTab === 'create' ? remaining : [];
+        syncNavState({ name: 'main', tab: targetTab }, targetTab, cleanedHistory, 'replace');
+      } else {
+        const nextTab = curTab === 'create' ? lastMain : curTab;
+        syncNavState(prev, nextTab, remaining, 'replace');
       }
-      return cleaned;
-    });
-    setCurrentTab('home');
-    setActiveRoute({ name: 'watch', videoId });
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.replaceState) {
-      try {
-        window.history.replaceState({ route: { name: 'watch', videoId } }, '');
-      } catch {}
+      return true;
     }
-  }, []);
+
+    if (curRoute.name !== 'main' || curTab === 'create') {
+      syncNavState({ name: 'main', tab: lastMain }, lastMain, [], 'replace');
+      return true;
+    }
+
+    if (curTab !== 'home') {
+      syncNavState({ name: 'main', tab: 'home' }, 'home', [], 'replace');
+      return true;
+    }
+
+    return false;
+  }, [syncNavState]);
+
+  const completePostAndWatch = useCallback(
+    (videoId: string) => {
+      // Sau khi đăng video mới: đặt duy nhất Trang chủ ('home') ở dưới đáy lịch sử
+      // Để khi ấn nút Quay lại (Back) sẽ về thẳng Trang chủ ngay lập tức, không nhảy lung tung!
+      const homeRoute: ScreenRoute = { name: 'main', tab: 'home' };
+      navRef.current.lastMainTab = 'home';
+      syncNavState({ name: 'watch', videoId }, 'home', [homeRoute], 'replace');
+    },
+    [syncNavState]
+  );
 
   // Hỗ trợ nút Back cứng trên Android & nút Back trình duyệt trên Web
   useEffect(() => {
@@ -276,40 +404,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const onPopState = () => {
+        isPopStateRef.current = true;
         goBack();
+        isPopStateRef.current = false;
       };
       window.addEventListener('popstate', onPopState);
       return () => window.removeEventListener('popstate', onPopState);
     }
   }, [goBack]);
 
-  const setTab = (tab: MainTabType) => {
-    if (activeRoute.name !== 'main') {
-      setRouteHistory((prev) => [...prev, activeRoute]);
-    }
-    setCurrentTab(tab);
-    setActiveRoute({ name: 'main', tab });
-  };
+  const openSearchWithQuery = useCallback(
+    (query: string) => {
+      setSearchPresetQuery(query.replace(/^#/, '').trim());
+      const curRoute = navRef.current.activeRoute;
+      const baseHistory: ScreenRoute[] =
+        curRoute.name !== 'main'
+          ? [{ name: 'main', tab: navRef.current.lastMainTab || 'home' }, curRoute]
+          : [];
+      syncNavState({ name: 'main', tab: 'search' }, 'search', baseHistory, 'push');
+    },
+    [syncNavState]
+  );
 
-  const openSearchWithQuery = (query: string) => {
-    setSearchPresetQuery(query.replace(/^#/, '').trim());
-    setCurrentTab('search');
-    setActiveRoute({ name: 'main', tab: 'search' });
-  };
-
-  const clearSearchPresetQuery = () => {
+  const clearSearchPresetQuery = useCallback(() => {
     setSearchPresetQuery('');
-  };
+  }, []);
 
-  const openCreateWithMusic = (musicId: string) => {
-    setCreatePresetMusicId(musicId);
-    setCurrentTab('create');
-    setActiveRoute({ name: 'main', tab: 'create' });
-  };
+  const openCreateWithMusic = useCallback(
+    (musicId: string) => {
+      setCreatePresetMusicId(musicId);
+      const curRoute = navRef.current.activeRoute;
+      const baseRoute: ScreenRoute = {
+        name: 'main',
+        tab: navRef.current.lastMainTab || 'home',
+      };
+      const nextHistory =
+        curRoute.name === 'main' ? [baseRoute] : [baseRoute, curRoute];
+      syncNavState({ name: 'main', tab: 'create' }, 'create', nextHistory, 'push');
+    },
+    [syncNavState]
+  );
 
-  const clearCreatePresetMusic = () => {
+  const clearCreatePresetMusic = useCallback(() => {
     setCreatePresetMusicId(null);
-  };
+  }, []);
 
   const toggleSaveFilter = (filterId: string) => {
     setSavedFilterIds((prev) => {
@@ -425,11 +563,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return v;
       })
     );
-
-    showToast(
-      isLiked ? 'Đã thêm vào Video yêu thích ❤️' : 'Đã bỏ thích video',
-      isLiked ? 'heart' : 'info'
-    );
   };
 
   const toggleBookmarkVideo = async (videoId: string) => {
@@ -441,11 +574,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setVideos((prevVideos) =>
       prevVideos.map((v) => (v.id === videoId ? { ...v, isBookmarked } : v))
-    );
-
-    showToast(
-      isBookmarked ? 'Đã lưu video vào bộ sưu tập 🔖' : 'Đã bỏ lưu video',
-      isBookmarked ? 'bookmark' : 'info'
     );
   };
 
@@ -529,8 +657,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return v;
       })
     );
-    showToast('Đã gửi bình luận 💬', 'success');
     return newComment;
+  };
+
+  const deleteComment = async (commentId: string) => {
+    const target = comments.find((c) => c.id === commentId);
+    await StorageService.deleteComment(commentId, currentUser.id);
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    if (target?.videoId) {
+      setVideos((prev) =>
+        prev.map((v) =>
+          v.id === target.videoId
+            ? { ...v, commentsCount: Math.max(0, (v.commentsCount || 0) - 1) }
+            : v
+        )
+      );
+    }
+    showToast('Đã xóa bình luận', 'info');
   };
 
   const toggleLikeComment = async (commentId: string) => {
@@ -727,6 +870,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openCreateWithMusic,
         clearCreatePresetMusic,
         addComment,
+        deleteComment,
         toggleLikeComment,
         addNewVideo,
         deleteVideo,

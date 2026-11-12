@@ -275,8 +275,19 @@ export const api = {
     request<T>(endpoint, { method: 'POST', body }),
   patch: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: 'PATCH', body }),
-  delete: <T>(endpoint: string) =>
-    request<T>(endpoint, { method: 'DELETE' }),
+  delete: <T>(
+    endpoint: string,
+    config?: {
+      params?: Record<string, string | number | boolean | undefined>;
+      body?: unknown;
+      data?: unknown;
+    }
+  ) =>
+    request<T>(endpoint, {
+      method: 'DELETE',
+      params: config?.params,
+      body: config?.body ?? config?.data,
+    }),
   uploadFile,
   generateAICaption,
   askAIVideo,

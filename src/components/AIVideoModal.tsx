@@ -161,7 +161,6 @@ export const AIVideoModal: React.FC<AIVideoModalProps> = ({
     setPostingCommentId(msgId);
     try {
       await addComment(video.id, commentText.trim(), 5);
-      showToast('Đã đăng bình luận gợi ý từ AI thành công! 💬✨', 'success');
     } finally {
       setPostingCommentId(null);
     }

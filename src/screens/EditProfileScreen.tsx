@@ -158,7 +158,11 @@ export const EditProfileScreen: React.FC = () => {
           { borderBottomColor: theme.border, backgroundColor: theme.surface },
         ]}
       >
-        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={goBack}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: theme.text }]}>

@@ -54,8 +54,20 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
     return idx >= 0 ? idx : 0;
   });
 
+  const videosLengthRef = useRef(videos.length);
+  videosLengthRef.current = videos.length;
+
+  useEffect(() => {
+    const idx = videos.findIndex((v) => v.id === videoId);
+    if (idx >= 0) {
+      setCurrentIndex(idx);
+    }
+  }, [videoId]);
+
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [aiModalVisible, setAiModalVisible] = useState(false);
+  const isModalOpenRef = useRef(false);
+  isModalOpenRef.current = commentModalVisible || aiModalVisible;
   const [descExpanded, setDescExpanded] = useState(false);
   const viewedIdsRef = useRef<Set<string>>(new Set());
   const discSpinAnim = useRef(new Animated.Value(0)).current;
@@ -124,15 +136,28 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   // Cử chỉ vuốt dọc (Vertical Swipe) chuẩn TikTok / Reels để chuyển video
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_evt, gestureState) => {
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // KHÓA HOÀN TOÀN cử chỉ chuyển video khi đang mở modal bình luận hoặc modal AI
+        if (isModalOpenRef.current) {
+          return false;
+        }
+        // Không bắt cử chỉ vuốt khi người dùng đang bấm ở vùng thanh điều hướng trên cùng (Nút Quay lại)
+        if (evt.nativeEvent.pageY < 96) {
+          return false;
+        }
         return (
-          Math.abs(gestureState.dy) > 28 &&
+          Math.abs(gestureState.dy) > 35 &&
           Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.5
         );
       },
+      onPanResponderTerminationRequest: () => true,
       onPanResponderRelease: (_evt, gestureState) => {
+        if (isModalOpenRef.current) return;
+        const total = videosLengthRef.current;
+        if (total <= 0) return;
         if (gestureState.dy < -45) {
-          setCurrentIndex((prev) => (prev < videos.length - 1 ? prev + 1 : 0));
+          setCurrentIndex((prev) => (prev < total - 1 ? prev + 1 : 0));
         } else if (gestureState.dy > 45) {
           setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev));
         }
@@ -143,8 +168,6 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
   const handleDoubleTapLike = () => {
     if (!isLiked) {
       toggleLikeVideo(currentVideo.id);
-    } else {
-      showToast('Bạn đã thả tim video này ❤️', 'heart');
     }
   };
 
@@ -210,7 +233,12 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
 
       {/* 2. Thanh điều hướng trên cùng */}
       <View style={[styles.topBar, { top: topInset }]}>
-        <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={goBack}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+          activeOpacity={0.75}
+        >
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
@@ -227,6 +255,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
             style={styles.navFeedBtn}
             onPress={handlePrevVideo}
             disabled={currentIndex === 0}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
             activeOpacity={0.7}
           >
             <Ionicons
@@ -238,6 +267,7 @@ export const VideoWatchingScreen: React.FC<VideoWatchingScreenProps> = ({ videoI
           <TouchableOpacity
             style={styles.navFeedBtn}
             onPress={handleNextVideo}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
             activeOpacity={0.7}
           >
             <Ionicons name="chevron-down" size={22} color="#FFFFFF" />
@@ -562,7 +592,9 @@ const styles = StyleSheet.create({
   },
   avatarWrapper: {
     position: 'relative',
-    marginBottom: 6,
+    width: 48,
+    height: 48,
+    marginBottom: 20,
   },
   creatorAvatar: {
     width: 48,
@@ -573,8 +605,8 @@ const styles = StyleSheet.create({
   },
   followPlusBadge: {
     position: 'absolute',
-    bottom: -6,
-    alignSelf: 'center',
+    bottom: -10,
+    left: 14,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -582,6 +614,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+    zIndex: 2,
   },
   actionBtn: {
     alignItems: 'center',

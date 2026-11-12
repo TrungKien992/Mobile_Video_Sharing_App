@@ -1440,6 +1440,26 @@ app.post('/api/comments/:id/like', async (req, res) => {
   }
 });
 
+// DELETE /api/comments/:id - Xóa bình luận của bản thân
+app.delete('/api/comments/:id', async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const userId = req.body?.userId || req.query?.userId;
+    const comment = await CommentModel.findOne({ id: commentId });
+    if (!comment) {
+      return res.status(404).json({ message: 'Không tìm thấy bình luận' });
+    }
+    if (userId && comment.userId !== String(userId)) {
+      return res.status(403).json({ message: 'Bạn chỉ có thể xóa bình luận của chính mình' });
+    }
+    await CommentModel.deleteOne({ id: commentId });
+    return res.json({ deleted: true, id: commentId, videoId: comment.videoId });
+  } catch (err) {
+    console.error('Delete comment error:', err);
+    return res.status(500).json({ message: 'Không thể xóa bình luận' });
+  }
+});
+
 // ----------------------------------------------------------------------------
 // 4.6. NOTIFICATIONS (Tham khảo Buổi 9 BT9.5)
 // ----------------------------------------------------------------------------

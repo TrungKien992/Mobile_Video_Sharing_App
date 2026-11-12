@@ -23,7 +23,7 @@ import { INITIAL_MUSICS, NO_MUSIC_ITEM } from '../data/initialMusics';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { FilterModal } from '../components/FilterModal';
 import { MusicModal } from '../components/MusicModal';
-import { uploadFile, generateAICaption } from '../api/client';
+import { uploadFile, generateAICaption, resolveMediaUrl } from '../api/client';
 import { showMessage, showToast } from '../utils/dialog';
 import { FilterItem, MusicItem, VideoDraft } from '../types';
 
@@ -38,7 +38,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   selectedFilterId,
   selectedMusicId,
 }) => {
-  const { videos, addNewVideo, goBack, completePostAndWatch } = useApp();
+  const { videos, addNewVideo, goBack, setTab, completePostAndWatch } = useApp();
   const { theme } = useTheme();
 
   const [videoUrl, setVideoUrl] = useState<string>(draftVideoUri || '');
@@ -101,6 +101,71 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
   useEffect(() => {
     StorageService.getDrafts().then(setSavedDrafts);
   }, []);
+
+  // Tự động chụp ảnh bắt đầu của video làm ảnh đại diện (Thumbnail) khi chọn video từ máy
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !videoUrl || coverPhotoUri) return;
+    if (typeof document === 'undefined') return;
+
+    let cancelled = false;
+    const videoEl = document.createElement('video');
+    videoEl.crossOrigin = 'anonymous';
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.preload = 'auto';
+    videoEl.src = resolveMediaUrl(videoUrl);
+
+    const captureFrame = () => {
+      if (cancelled) return;
+      try {
+        const w = videoEl.videoWidth || 480;
+        const h = videoEl.videoHeight || 854;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(videoEl, 0, 0, w, h);
+        canvas.toBlob(
+          async (blob) => {
+            if (cancelled || !blob) return;
+            try {
+              const file = new File([blob], `thumb_${Date.now()}.jpg`, {
+                type: 'image/jpeg',
+              });
+              const uploaded = await uploadFile(file);
+              if (!cancelled && uploaded?.url) {
+                setCoverPhotoUri((prev) => prev || uploaded.url);
+              }
+            } catch {
+              try {
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                if (!cancelled && dataUrl) {
+                  setCoverPhotoUri((prev) => prev || dataUrl);
+                }
+              } catch {}
+            }
+          },
+          'image/jpeg',
+          0.85
+        );
+      } catch {}
+    };
+
+    videoEl.onloadedmetadata = () => {
+      try {
+        videoEl.currentTime = Math.min(0.15, (videoEl.duration || 1) * 0.1);
+      } catch {
+        captureFrame();
+      }
+    };
+    videoEl.onseeked = captureFrame;
+
+    return () => {
+      cancelled = true;
+      videoEl.src = '';
+    };
+  }, [videoUrl, coverPhotoUri]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -383,7 +448,7 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
         duration: videoDuration || '00:15',
       });
 
-      showMessage('Đăng thành công', 'Video của bạn đã được đăng thành công.');
+      showToast('🎉 Đã đăng video mới thành công!', 'success');
       completePostAndWatch(created.id);
     } catch (err: any) {
       showMessage('Lỗi đăng video', err?.message || 'Không thể đăng video');
@@ -426,13 +491,25 @@ export const PostVideoScreen: React.FC<PostVideoScreenProps> = ({
           { backgroundColor: theme.surface, borderBottomColor: theme.border },
         ]}
       >
-        <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={goBack}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={[styles.backBtn, { backgroundColor: theme.surfaceVariant }]}
+          activeOpacity={0.7}
+        >
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>
           Xuất bản Video mới
         </Text>
-        <View style={{ width: 32 }} />
+        <TouchableOpacity
+          onPress={() => setTab('home')}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={[styles.backBtn, { backgroundColor: theme.surfaceVariant }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={22} color={theme.text} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -955,7 +1032,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backBtn: {
-    padding: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,

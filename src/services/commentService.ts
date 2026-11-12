@@ -63,3 +63,18 @@ export async function toggleLikeCommentApi(
     return { isLiked: true };
   }
 }
+
+export async function deleteCommentApi(
+  commentId: string,
+  userId?: string
+): Promise<boolean> {
+  try {
+    await api.delete(`/api/comments/${commentId}`, {
+      data: { userId },
+      params: { userId },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
